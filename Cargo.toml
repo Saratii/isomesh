@@ -1,0 +1,14 @@
+[package]
+name = "isomesh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+once_cell = "1.21.3"
+glam = "0.30.8"
+rayon = "1.8"
+
+[workspace]
+members = ["examples"]
+
+#cargo run -p  examples --bin bevy_integration -r
