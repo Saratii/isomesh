@@ -6,6 +6,10 @@ edition = "2021"
 name = "mdc_bevy_integration"
 path = "src/mdc_bevy_integration.rs"
 
+[[bin]]
+name = "mdc_bevy_large"
+path = "src/mdc_bevy_large.rs"
+
 [dependencies]
 bevy = "0.15.3"
 isomesh = { path = ".." }

@@ -1,5 +1,3 @@
-pub mod mdc_bevy_large;
-
 use bevy::{
     pbr::wireframe::{WireframeConfig, WireframePlugin},
     prelude::*,
@@ -11,11 +9,8 @@ use bevy::{
         RenderPlugin,
     },
 };
-use isomesh::mdc::sampler::SphereSampler;
-use isomesh::mdc::{
-    mdc::{mdc_mesh_generation, MeshBuffers},
-    sampler::CuboidSampler,
-};
+use isomesh::mdc::mdc::{mdc_mesh_generation, MeshBuffers};
+use isomesh::mdc::sampler::FunBlobSampler;
 
 fn main() {
     App::new()
@@ -40,17 +35,10 @@ fn setup_mdc(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     //create sphere
-    let resolution = 64;
-    let sphere_sampler = SphereSampler::new(Vec3::new(0.0, 0.0, 0.0), 20.0);
+    let resolution = 512;
+    let fun_blob = FunBlobSampler::new(Vec3::new(0.0, 0.0, 0.0), 40.0);
     let mut mesh_buffers = MeshBuffers::new();
-    mdc_mesh_generation(
-        0.5,
-        &mut mesh_buffers,
-        false,
-        resolution,
-        true,
-        &sphere_sampler,
-    );
+    mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, &fun_blob);
     let sphere_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((
         Mesh3d(meshes.add(sphere_mesh)),
@@ -58,29 +46,7 @@ fn setup_mdc(
             unlit: true,
             ..default()
         })),
-        Transform::from_xyz(20.0, 0.0, -20.0),
-    ));
-    //create cuboid
-    let resolution = 64;
-    let size = Vec3::new(10.0, 15.0, 20.0);
-    let cuboid_sampler = CuboidSampler::new(Vec3::new(0.0, 0.0, 0.0), size);
-    let mut mesh_buffers = MeshBuffers::new();
-    mdc_mesh_generation(
-        0.5,
-        &mut mesh_buffers,
-        false,
-        resolution,
-        true,
-        &cuboid_sampler,
-    );
-    let cuboid_mesh = generate_bevy_mesh(mesh_buffers);
-    commands.spawn((
-        Mesh3d(meshes.add(cuboid_mesh)),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            unlit: true,
-            ..default()
-        })),
-        Transform::from_xyz(-20.0, 0.0, 20.0),
+        Transform::from_xyz(0.0, 0.0, 0.0),
     ));
     //light
     commands.spawn((
@@ -99,7 +65,7 @@ fn setup_mdc(
     //camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(60.0, 60.0, 60.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_xyz(100.0, 100.0, 100.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     ));
 }
 
