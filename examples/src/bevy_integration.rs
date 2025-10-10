@@ -56,7 +56,6 @@ fn setup_mdc(
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-    let indices: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
     mesh.insert_indices(Indices::U32(indices));
     println!(
         "Mesh created with {} vertices and {} triangles",

@@ -345,22 +345,19 @@ impl OctreeNode {
         true
     }
 
-    pub fn process_cell(&self, indexes: &mut Vec<i32>, tri_count: &mut Vec<i32>, threshold: f32) {
+    pub fn process_cell(&self, indexes: &mut Vec<u32>, tri_count: &mut Vec<i32>, threshold: f32) {
         if self.node_type == NodeType::Internal {
             for i in 0..8 {
                 if let Some(ref child) = self.children[i] {
                     child.process_cell(indexes, tri_count, threshold);
                 }
             }
-
             for i in 0..12 {
                 let mut face_nodes = [None, None];
                 let c1 = T_EDGE_PAIRS[i][0];
                 let c2 = T_EDGE_PAIRS[i][1];
-
                 face_nodes[0] = self.children[c1 as usize].as_ref().map(|b| b.as_ref());
                 face_nodes[1] = self.children[c2 as usize].as_ref().map(|b| b.as_ref());
-
                 Self::process_face(
                     &face_nodes,
                     T_EDGE_PAIRS[i][2] as i32,
@@ -369,7 +366,6 @@ impl OctreeNode {
                     threshold,
                 );
             }
-
             for i in 0..6 {
                 let edge_nodes = [
                     self.children[T_CELL_PROC_EDGE_MASK[i][0] as usize]
@@ -385,7 +381,6 @@ impl OctreeNode {
                         .as_ref()
                         .map(|b| b.as_ref()),
                 ];
-
                 Self::process_edge(
                     &edge_nodes,
                     T_CELL_PROC_EDGE_MASK[i][4] as i32,
@@ -400,21 +395,18 @@ impl OctreeNode {
     pub fn process_face(
         nodes: &[Option<&OctreeNode>; 2],
         direction: i32,
-        indexes: &mut Vec<i32>,
+        indexes: &mut Vec<u32>,
         tri_count: &mut Vec<i32>,
         threshold: f32,
     ) {
         if nodes[0].is_none() || nodes[1].is_none() {
             return;
         }
-
         let node0 = nodes[0].unwrap();
         let node1 = nodes[1].unwrap();
-
         if node0.node_type != NodeType::Leaf || node1.node_type != NodeType::Leaf {
             for i in 0..4 {
                 let mut face_nodes = [None, None];
-
                 for j in 0..2 {
                     if let Some(node) = nodes[j] {
                         if node.node_type == NodeType::Leaf {
@@ -426,7 +418,6 @@ impl OctreeNode {
                         }
                     }
                 }
-
                 Self::process_face(
                     &face_nodes,
                     T_FACE_PROC_FACE_MASK[direction as usize][i][2] as i32,
@@ -435,9 +426,7 @@ impl OctreeNode {
                     threshold,
                 );
             }
-
             let orders = [[0, 0, 1, 1], [0, 1, 0, 1]];
-
             for i in 0..4 {
                 let mut edge_nodes = [None, None, None, None];
 
@@ -453,7 +442,6 @@ impl OctreeNode {
                         }
                     }
                 }
-
                 Self::process_edge(
                     &edge_nodes,
                     T_FACE_PROC_EDGE_MASK[direction as usize][i][5] as i32,
@@ -468,14 +456,13 @@ impl OctreeNode {
     pub fn process_edge(
         nodes: &[Option<&OctreeNode>; 4],
         direction: i32,
-        indexes: &mut Vec<i32>,
+        indexes: &mut Vec<u32>,
         tri_count: &mut Vec<i32>,
         threshold: f32,
     ) {
         if nodes[0].is_none() || nodes[1].is_none() || nodes[2].is_none() || nodes[3].is_none() {
             return;
         }
-
         if nodes[0].unwrap().node_type == NodeType::Leaf
             && nodes[1].unwrap().node_type == NodeType::Leaf
             && nodes[2].unwrap().node_type == NodeType::Leaf
@@ -485,7 +472,6 @@ impl OctreeNode {
         } else {
             for i in 0..2 {
                 let mut edge_nodes = [None, None, None, None];
-
                 for j in 0..4 {
                     if let Some(node) = nodes[j] {
                         if node.node_type == NodeType::Leaf {
@@ -497,7 +483,6 @@ impl OctreeNode {
                         }
                     }
                 }
-
                 Self::process_edge(
                     &edge_nodes,
                     T_EDGE_PROC_EDGE_MASK[direction as usize][i][4] as i32,
@@ -512,7 +497,7 @@ impl OctreeNode {
     pub fn process_indexes(
         nodes: &[Option<&OctreeNode>; 4],
         direction: i32,
-        indexes: &mut Vec<i32>,
+        indexes: &mut Vec<u32>,
         tri_count: &mut Vec<i32>,
         threshold: f32,
     ) {
@@ -584,9 +569,9 @@ impl OctreeNode {
                     && indices[0] != indices[1]
                     && indices[1] != indices[3]
                 {
-                    indexes.push(indices[0] & 0x0FFFFFFF);
-                    indexes.push(indices[1] & 0x0FFFFFFF);
-                    indexes.push(indices[3] & 0x0FFFFFFF);
+                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[1] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
                     count += 1;
                 }
                 if indices[0] != -1
@@ -595,9 +580,9 @@ impl OctreeNode {
                     && indices[0] != indices[2]
                     && indices[2] != indices[3]
                 {
-                    indexes.push(indices[0] & 0x0FFFFFFF);
-                    indexes.push(indices[3] & 0x0FFFFFFF);
-                    indexes.push(indices[2] & 0x0FFFFFFF);
+                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[2] & 0x0FFFFFFF) as u32);
                     count += 1;
                 }
             } else {
@@ -607,9 +592,9 @@ impl OctreeNode {
                     && indices[0] != indices[1]
                     && indices[1] != indices[3]
                 {
-                    indexes.push(indices[0] & 0x0FFFFFFF);
-                    indexes.push(indices[3] & 0x0FFFFFFF);
-                    indexes.push(indices[1] & 0x0FFFFFFF);
+                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[1] & 0x0FFFFFFF) as u32);
                     count += 1;
                 }
                 if indices[0] != -1
@@ -618,9 +603,9 @@ impl OctreeNode {
                     && indices[0] != indices[2]
                     && indices[2] != indices[3]
                 {
-                    indexes.push(indices[0] & 0x0FFFFFFF);
-                    indexes.push(indices[2] & 0x0FFFFFFF);
-                    indexes.push(indices[3] & 0x0FFFFFFF);
+                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[2] & 0x0FFFFFFF) as u32);
+                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
                     count += 1;
                 }
             }

@@ -9,7 +9,7 @@ pub struct MeshBuffers {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub colors: Vec<[f32; 4]>,
-    pub indices: Vec<i32>,
+    pub indices: Vec<u32>,
 }
 
 impl MeshBuffers {
@@ -334,7 +334,7 @@ pub fn calculate_indexes(
         mesh_buffers.normals = new_normals;
         mesh_buffers.colors = new_colors;
         mesh_buffers.indices.clear();
-        mesh_buffers.indices.extend(0..vertex_count as i32);
+        mesh_buffers.indices.extend(0..vertex_count as u32);
     }
 }
 
