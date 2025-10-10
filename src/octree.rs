@@ -2,10 +2,12 @@
 
 use glam::Vec3;
 use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
+use crate::mdc::MeshBuffers;
 use crate::qef_solver::QEFSolver;
 use crate::sampler::Sampler;
 use crate::tables::*;
@@ -76,33 +78,14 @@ impl Vertex {
     }
 }
 
-impl std::fmt::Debug for Vertex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for Vertex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Surface = {}, parent = {}",
             self.surface_index,
             self.parent.is_some()
         )
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct VertexPositionColorNormalNormal {
-    pub position: Vec3,
-    pub color: [f32; 4],
-    pub normal: Vec3,
-    pub normal2: Vec3,
-}
-
-impl VertexPositionColorNormalNormal {
-    pub fn new(position: Vec3, color: [f32; 4], normal: Vec3, normal2: Vec3) -> Self {
-        VertexPositionColorNormalNormal {
-            position,
-            color,
-            normal,
-            normal2,
-        }
     }
 }
 
@@ -156,12 +139,7 @@ impl OctreeNode {
         unsafe { ENFORCE_MANIFOLD }
     }
 
-    pub fn construct_base(
-        &mut self,
-        size: i32,
-        _error: f32,
-        vertices: &mut Vec<VertexPositionColorNormalNormal>,
-    ) {
+    pub fn construct_base(&mut self, size: i32, mesh_buffers: &mut MeshBuffers) {
         self.index = 0;
         self.position = Vec3::ZERO;
         self.size = size;
@@ -170,59 +148,55 @@ impl OctreeNode {
         self.vertices = Vec::new();
         self.child_index = 0;
         let mut n_index = 1;
-        self.construct_nodes(vertices, &mut n_index, 4);
+        self.construct_nodes(mesh_buffers, &mut n_index, 4);
     }
 
-    pub fn generate_vertex_buffer(&self, vertices: &mut Vec<VertexPositionColorNormalNormal>) {
+    pub fn generate_vertex_buffer(&self, mesh_buffers: &mut MeshBuffers) {
         if self.node_type != NodeType::Leaf {
             for i in 0..8 {
                 if let Some(ref child) = self.children[i] {
-                    child.generate_vertex_buffer(vertices);
+                    child.generate_vertex_buffer(mesh_buffers);
                 }
             }
         }
-
         if self.vertices.is_empty() {
             return;
         }
-
         for i in 0..self.vertices.len() {
             let mut vertex = self.vertices[i].lock().unwrap();
-            vertex.index = vertices.len() as i32;
+            vertex.index = mesh_buffers.positions.len() as i32;
             let nc = vertex.normal * 0.5 + Vec3::ONE * 0.5;
             let nc_normalized = nc.normalize();
             let color = [nc_normalized.x, nc_normalized.y, nc_normalized.z, 1.0];
 
             if let Some(ref mut qef) = vertex.qef {
                 let position = qef.solve(1e-6, 4, 1e-6);
-                vertices.push(VertexPositionColorNormalNormal::new(
-                    position,
-                    color,
-                    vertex.normal,
-                    vertex.normal,
-                ));
+                mesh_buffers
+                    .positions
+                    .push([position.x, position.y, position.z]);
+                mesh_buffers
+                    .normals
+                    .push([vertex.normal.x, vertex.normal.y, vertex.normal.z]);
+                mesh_buffers.colors.push(color);
             }
         }
     }
 
     pub fn construct_nodes(
         &mut self,
-        vertices: &mut Vec<VertexPositionColorNormalNormal>,
+        mesh_buffers: &mut MeshBuffers,
         n_index: &mut i32,
         threaded: i32,
     ) -> bool {
         if self.size == 1 {
-            return self.construct_leaf(vertices, n_index);
+            return self.construct_leaf(n_index);
         }
-
         self.node_type = NodeType::Internal;
         let child_size = self.size / 2;
         let mut has_children = false;
-
         if threaded > 0 && self.size > 2 {
             let mut handles = Vec::new();
             let mut return_values = vec![false; 8];
-
             for i in 0..8 {
                 self.index = *n_index;
                 *n_index += 1;
@@ -233,18 +207,21 @@ impl OctreeNode {
                     NodeType::Internal,
                 ));
                 child.child_index = i as i32;
-
                 let handle = thread::spawn(move || {
                     let mut temp = 0;
-                    let mut verts = Vec::new();
-                    let result = child.construct_nodes(&mut verts, &mut temp, threaded - 1);
-                    (result, child, verts)
+                    let mut temp_buffers = MeshBuffers {
+                        positions: Vec::new(),
+                        normals: Vec::new(),
+                        colors: Vec::new(),
+                        indices: Vec::new(),
+                    };
+                    let result = child.construct_nodes(&mut temp_buffers, &mut temp, threaded - 1);
+                    (result, child, temp_buffers)
                 });
                 handles.push(handle);
             }
-
             for (i, handle) in handles.into_iter().enumerate() {
-                let (result, child, _verts) = handle.join().unwrap();
+                let (result, child, _temp_buffers) = handle.join().unwrap();
                 return_values[i] = result;
                 if result {
                     self.children[i] = Some(child);
@@ -263,21 +240,16 @@ impl OctreeNode {
                 ));
                 child.child_index = i as i32;
 
-                if child.construct_nodes(vertices, n_index, 0) {
+                if child.construct_nodes(mesh_buffers, n_index, 0) {
                     has_children = true;
                     self.children[i] = Some(child);
                 }
             }
         }
-
         has_children
     }
 
-    pub fn construct_leaf(
-        &mut self,
-        _vertices: &mut Vec<VertexPositionColorNormalNormal>,
-        index: &mut i32,
-    ) -> bool {
+    pub fn construct_leaf(&mut self, index: &mut i32) -> bool {
         if self.size != 1 {
             return false;
         }
@@ -612,9 +584,9 @@ impl OctreeNode {
                     && indices[0] != indices[1]
                     && indices[1] != indices[3]
                 {
-                    indexes.push(indices[0]);
-                    indexes.push(indices[1]);
-                    indexes.push(indices[3]);
+                    indexes.push(indices[0] & 0x0FFFFFFF);
+                    indexes.push(indices[1] & 0x0FFFFFFF);
+                    indexes.push(indices[3] & 0x0FFFFFFF);
                     count += 1;
                 }
                 if indices[0] != -1
@@ -623,9 +595,9 @@ impl OctreeNode {
                     && indices[0] != indices[2]
                     && indices[2] != indices[3]
                 {
-                    indexes.push(indices[0]);
-                    indexes.push(indices[3]);
-                    indexes.push(indices[2]);
+                    indexes.push(indices[0] & 0x0FFFFFFF);
+                    indexes.push(indices[3] & 0x0FFFFFFF);
+                    indexes.push(indices[2] & 0x0FFFFFFF);
                     count += 1;
                 }
             } else {
@@ -635,9 +607,9 @@ impl OctreeNode {
                     && indices[0] != indices[1]
                     && indices[1] != indices[3]
                 {
-                    indexes.push(0x10000000 | indices[0]);
-                    indexes.push(0x10000000 | indices[3]);
-                    indexes.push(0x10000000 | indices[1]);
+                    indexes.push(indices[0] & 0x0FFFFFFF);
+                    indexes.push(indices[3] & 0x0FFFFFFF);
+                    indexes.push(indices[1] & 0x0FFFFFFF);
                     count += 1;
                 }
                 if indices[0] != -1
@@ -646,9 +618,9 @@ impl OctreeNode {
                     && indices[0] != indices[2]
                     && indices[2] != indices[3]
                 {
-                    indexes.push(0x10000000 | indices[0]);
-                    indexes.push(0x10000000 | indices[2]);
-                    indexes.push(0x10000000 | indices[3]);
+                    indexes.push(indices[0] & 0x0FFFFFFF);
+                    indexes.push(indices[2] & 0x0FFFFFFF);
+                    indexes.push(indices[3] & 0x0FFFFFFF);
                     count += 1;
                 }
             }

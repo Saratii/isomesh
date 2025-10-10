@@ -4,7 +4,7 @@ edition = "2021"
 
 [[bin]]
 name = "bevy_integration"
-path = "bevy_integration.rs"
+path = "src/bevy_integration.rs"
 
 [dependencies]
 bevy = "0.15.3"
