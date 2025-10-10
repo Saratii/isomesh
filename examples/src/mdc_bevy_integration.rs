@@ -11,8 +11,8 @@ use bevy::{
         RenderPlugin,
     },
 };
-
-use isomesh::mdc::{mdc_mesh_generation, MeshBuffers};
+use isomesh::mdc::mdc::{mdc_mesh_generation, MeshBuffers};
+use isomesh::mdc::sampler::SphereSampler;
 
 fn main() {
     App::new()
@@ -37,10 +37,11 @@ fn setup_mdc(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let resolution = 64;
+    let sphere = SphereSampler::new(Vec3::new(0.0, 0.0, 0.0), 30.0);
     let mut mesh_buffers = MeshBuffers::new();
     println!("Starting MDC contour...");
     let t0 = Instant::now();
-    mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true);
+    mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, &sphere);
     println!("MDC contour finished in {} ms", t0.elapsed().as_millis());
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -84,6 +85,6 @@ fn setup_mdc(
     });
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(80.0, 80.0, 80.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_xyz(60.0, 60.0, 60.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     ));
 }

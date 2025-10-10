@@ -2,28 +2,28 @@
 
 use glam::Vec3;
 
-use crate::{smat3::SMat3, svd};
+use crate::mdc::{smat3::SMat3, svd::solve_symmetric};
 
 #[derive(Debug, Clone)]
-pub struct QEFData {
-    pub ata_00: f32,
-    pub ata_01: f32,
-    pub ata_02: f32,
-    pub ata_11: f32,
-    pub ata_12: f32,
-    pub ata_22: f32,
-    pub atb_x: f32,
-    pub atb_y: f32,
-    pub atb_z: f32,
-    pub btb: f32,
-    pub mass_point_x: f32,
-    pub mass_point_y: f32,
-    pub mass_point_z: f32,
-    pub num_points: i32,
+pub(crate) struct QEFData {
+    pub(crate) ata_00: f32,
+    pub(crate) ata_01: f32,
+    pub(crate) ata_02: f32,
+    pub(crate) ata_11: f32,
+    pub(crate) ata_12: f32,
+    pub(crate) ata_22: f32,
+    pub(crate) atb_x: f32,
+    pub(crate) atb_y: f32,
+    pub(crate) atb_z: f32,
+    pub(crate) btb: f32,
+    pub(crate) mass_point_x: f32,
+    pub(crate) mass_point_y: f32,
+    pub(crate) mass_point_z: f32,
+    pub(crate) num_points: i32,
 }
 
 impl QEFData {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             ata_00: 0.0,
             ata_01: 0.0,
@@ -42,41 +42,7 @@ impl QEFData {
         }
     }
 
-    pub fn with_values(
-        ata_00: f32,
-        ata_01: f32,
-        ata_02: f32,
-        ata_11: f32,
-        ata_12: f32,
-        ata_22: f32,
-        atb_x: f32,
-        atb_y: f32,
-        atb_z: f32,
-        btb: f32,
-        mass_point_x: f32,
-        mass_point_y: f32,
-        mass_point_z: f32,
-        num_points: i32,
-    ) -> Self {
-        Self {
-            ata_00,
-            ata_01,
-            ata_02,
-            ata_11,
-            ata_12,
-            ata_22,
-            atb_x,
-            atb_y,
-            atb_z,
-            btb,
-            mass_point_x,
-            mass_point_y,
-            mass_point_z,
-            num_points,
-        }
-    }
-
-    pub fn add(&mut self, rhs: &QEFData) {
+    pub(crate) fn add(&mut self, rhs: &QEFData) {
         self.ata_00 += rhs.ata_00;
         self.ata_01 += rhs.ata_01;
         self.ata_02 += rhs.ata_02;
@@ -92,64 +58,6 @@ impl QEFData {
         self.mass_point_z += rhs.mass_point_z;
         self.num_points += rhs.num_points;
     }
-
-    pub fn clear(&mut self) {
-        self.set(
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0,
-        );
-    }
-
-    pub fn set(
-        &mut self,
-        ata_00: f32,
-        ata_01: f32,
-        ata_02: f32,
-        ata_11: f32,
-        ata_12: f32,
-        ata_22: f32,
-        atb_x: f32,
-        atb_y: f32,
-        atb_z: f32,
-        btb: f32,
-        mass_point_x: f32,
-        mass_point_y: f32,
-        mass_point_z: f32,
-        num_points: i32,
-    ) {
-        self.ata_00 = ata_00;
-        self.ata_01 = ata_01;
-        self.ata_02 = ata_02;
-        self.ata_11 = ata_11;
-        self.ata_12 = ata_12;
-        self.ata_22 = ata_22;
-        self.atb_x = atb_x;
-        self.atb_y = atb_y;
-        self.atb_z = atb_z;
-        self.btb = btb;
-        self.mass_point_x = mass_point_x;
-        self.mass_point_y = mass_point_y;
-        self.mass_point_z = mass_point_z;
-        self.num_points = num_points;
-    }
-
-    pub fn set_from(&mut self, rhs: &QEFData) {
-        self.set(
-            rhs.ata_00,
-            rhs.ata_01,
-            rhs.ata_02,
-            rhs.ata_11,
-            rhs.ata_12,
-            rhs.ata_22,
-            rhs.atb_x,
-            rhs.atb_y,
-            rhs.atb_z,
-            rhs.btb,
-            rhs.mass_point_x,
-            rhs.mass_point_y,
-            rhs.mass_point_z,
-            rhs.num_points,
-        );
-    }
 }
 
 impl Default for QEFData {
@@ -159,18 +67,18 @@ impl Default for QEFData {
 }
 
 #[derive(Clone)]
-pub struct QEFSolver {
-    pub data: QEFData,
-    pub ata: SMat3,
-    pub atb: Vec3,
-    pub x: Vec3,
-    pub mass_point: Vec3,
-    pub has_solution: bool,
-    pub last_error: f32,
+pub(crate) struct QEFSolver {
+    pub(crate) data: QEFData,
+    pub(crate) ata: SMat3,
+    pub(crate) atb: Vec3,
+    pub(crate) x: Vec3,
+    pub(crate) mass_point: Vec3,
+    pub(crate) has_solution: bool,
+    pub(crate) last_error: f32,
 }
 
 impl QEFSolver {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             data: QEFData::new(),
             ata: SMat3::new(),
@@ -182,7 +90,7 @@ impl QEFSolver {
         }
     }
 
-    pub fn add(&mut self, p: Vec3, n: Vec3) {
+    pub(crate) fn add(&mut self, p: Vec3, n: Vec3) {
         self.has_solution = false;
         let n = n.normalize();
         self.data.ata_00 += n.x * n.x;
@@ -202,16 +110,16 @@ impl QEFSolver {
         self.data.num_points += 1;
     }
 
-    pub fn add_data(&mut self, rhs: &QEFData) {
+    pub(crate) fn add_data(&mut self, rhs: &QEFData) {
         self.has_solution = false;
         self.data.add(rhs);
     }
 
-    pub fn get_error(&mut self) -> f32 {
+    pub(crate) fn get_error(&mut self) -> f32 {
         self.get_error_at(self.x)
     }
 
-    pub fn get_error_at(&mut self, pos: Vec3) -> f32 {
+    pub(crate) fn get_error_at(&mut self, pos: Vec3) -> f32 {
         if !self.has_solution {
             self.set_ata();
             self.set_atb();
@@ -230,7 +138,7 @@ impl QEFSolver {
         self.last_error
     }
 
-    pub fn solve(&mut self, svd_tol: f32, svd_sweeps: i32, pinv_tol: f32) -> Vec3 {
+    pub(crate) fn solve(&mut self, svd_tol: f32, svd_sweeps: i32, pinv_tol: f32) -> Vec3 {
         if self.data.num_points == 0 {
             panic!("QEFSolver: no points to solve");
         }
@@ -245,7 +153,7 @@ impl QEFSolver {
         let tmpv = self.ata.vmul(self.mass_point);
         self.atb = self.atb - tmpv;
         self.x = Vec3::ZERO;
-        let result = svd::solve_symmetric(
+        let result = solve_symmetric(
             &self.ata,
             &self.atb,
             &mut self.x,

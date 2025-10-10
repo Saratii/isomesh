@@ -3,8 +3,8 @@ name = "examples"
 edition = "2021"
 
 [[bin]]
-name = "bevy_integration"
-path = "src/bevy_integration.rs"
+name = "mdc_bevy_integration"
+path = "src/mdc_bevy_integration.rs"
 
 [dependencies]
 bevy = "0.15.3"

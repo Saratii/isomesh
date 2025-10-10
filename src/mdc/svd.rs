@@ -1,5 +1,6 @@
-use crate::{mat3::Mat3, smat3::SMat3};
 use glam::Vec3;
+
+use crate::mdc::{mat3::Mat3, smat3::SMat3};
 
 pub fn rotate01(vtav: &mut SMat3, v: &mut Mat3) {
     if vtav.m01 == 0.0 {

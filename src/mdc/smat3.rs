@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-use crate::mat3::Mat3;
+use crate::mdc::mat3::Mat3;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SMat3 {
