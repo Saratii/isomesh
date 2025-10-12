@@ -5,6 +5,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::thread;
 
 use crate::mdc::mdc::MeshBuffers;
@@ -30,7 +32,6 @@ pub enum NodeType {
     None,
     Internal,
     Leaf,
-    Collapsed,
 }
 
 pub(crate) struct Vertex {
@@ -105,7 +106,7 @@ pub(crate) struct OctreeNode {
     pub(crate) child_index: i32,
 }
 
-static mut ENFORCE_MANIFOLD: bool = false;
+static ENFORCE_MANIFOLD: AtomicBool = AtomicBool::new(false);
 
 impl OctreeNode {
     pub(crate) fn new() -> Self {
@@ -135,13 +136,11 @@ impl OctreeNode {
     }
 
     pub(crate) fn set_enforce_manifold(enforce: bool) {
-        unsafe {
-            ENFORCE_MANIFOLD = enforce;
-        }
+        ENFORCE_MANIFOLD.store(enforce, Ordering::Relaxed);
     }
 
     pub(crate) fn get_enforce_manifold() -> bool {
-        unsafe { ENFORCE_MANIFOLD }
+        ENFORCE_MANIFOLD.load(Ordering::Relaxed)
     }
 
     pub(crate) fn construct_base<S>(
@@ -447,7 +446,6 @@ impl OctreeNode {
             let orders = [[0, 0, 1, 1], [0, 1, 0, 1]];
             for i in 0..4 {
                 let mut edge_nodes = [None, None, None, None];
-
                 for j in 0..4 {
                     let order_idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][0];
                     if let Some(node) = nodes[orders[order_idx as usize][j]] {
@@ -564,7 +562,6 @@ impl OctreeNode {
                         Some(arc) => Arc::clone(arc),
                         None => break,
                     };
-
                     let parent = parent_arc.lock().unwrap();
                     if parent.error <= threshold
                         && (!Self::get_enforce_manifold()

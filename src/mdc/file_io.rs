@@ -2,6 +2,7 @@ use crate::mdc::mdc::MeshBuffers;
 use std::fs::File;
 use std::io::Write;
 
+#[allow(dead_code)]
 pub fn write_to_rust(mesh_buffers: &MeshBuffers, path: &str) -> std::io::Result<()> {
     let mut file = File::create(path)?;
 

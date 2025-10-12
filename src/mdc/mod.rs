@@ -1,10 +1,10 @@
-pub mod file_io;
-pub mod mat3;
+pub(crate) mod file_io;
+pub(crate) mod mat3;
 pub mod mdc;
-pub mod octree;
-pub mod qef_solver;
+pub(crate) mod octree;
+pub(crate) mod qef_solver;
 pub mod sampler;
-pub mod smat3;
-pub mod svd;
-pub mod tables;
+pub(crate) mod smat3;
+pub(crate) mod svd;
+pub(crate) mod tables;
 pub(crate) mod test_data;

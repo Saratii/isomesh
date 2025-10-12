@@ -13,7 +13,14 @@ pub struct MeshBuffers {
 }
 
 impl MeshBuffers {
+    #[inline]
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for MeshBuffers {
+    fn default() -> Self {
         Self {
             positions: Vec::new(),
             normals: Vec::new(),
@@ -126,8 +133,7 @@ pub(crate) fn calculate_indexes(
         mesh_buffers.positions = new_positions;
         mesh_buffers.normals = new_normals;
         mesh_buffers.colors = new_colors;
-        mesh_buffers.indices.clear();
-        mesh_buffers.indices.extend(0..vertex_count as u32);
+        mesh_buffers.indices = (0..vertex_count as u32).collect();
     }
 }
 

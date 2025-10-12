@@ -52,12 +52,6 @@ pub fn get_symmetric_svd(a: &SMat3, vtav: &mut SMat3, v: &mut Mat3, tol: f32, ma
     }
 }
 
-pub fn calc_error_mat(a: &Mat3, x: Vec3, b: Vec3) -> f32 {
-    let vtmp = a.vmul(x);
-    let vtmp = b - vtmp;
-    vtmp.x * vtmp.x + vtmp.y * vtmp.y + vtmp.z * vtmp.z
-}
-
 pub fn calc_error_smat(orig_a: &SMat3, x: Vec3, b: Vec3) -> f32 {
     let mut a = Mat3::new();
     a.set_symmetric(orig_a);
@@ -66,7 +60,7 @@ pub fn calc_error_smat(orig_a: &SMat3, x: Vec3, b: Vec3) -> f32 {
     vtmp.x * vtmp.x + vtmp.y * vtmp.y + vtmp.z * vtmp.z
 }
 
-pub fn pinv(x: f32, tol: f32) -> f32 {
+pub(crate) fn pinv(x: f32, tol: f32) -> f32 {
     if x.abs() < tol || (1.0 / x).abs() < tol {
         0.0
     } else {
@@ -74,7 +68,7 @@ pub fn pinv(x: f32, tol: f32) -> f32 {
     }
 }
 
-pub fn pseudo_inverse(d: &SMat3, v: &Mat3, tol: f32) -> Mat3 {
+pub(crate) fn pseudo_inverse(d: &SMat3, v: &Mat3, tol: f32) -> Mat3 {
     let mut m = Mat3::new();
     let d0 = pinv(d.m00, tol);
     let d1 = pinv(d.m11, tol);
@@ -93,7 +87,7 @@ pub fn pseudo_inverse(d: &SMat3, v: &Mat3, tol: f32) -> Mat3 {
     m
 }
 
-pub fn solve_symmetric(
+pub(crate) fn solve_symmetric(
     a: &SMat3,
     b: &Vec3,
     x: &mut Vec3,
@@ -107,18 +101,4 @@ pub fn solve_symmetric(
     let pinv = pseudo_inverse(&vtav, &v, pinv_tol);
     *x = pinv.vmul(*b);
     calc_error_smat(a, *x, *b)
-}
-
-pub fn solve_least_squares(
-    a: &Mat3,
-    b: Vec3,
-    x: &mut Vec3,
-    svd_tol: f32,
-    svd_sweeps: i32,
-    pinv_tol: f32,
-) -> f32 {
-    let at = a.transpose();
-    let ata = a.mul_ata();
-    let atb = at.vmul(b);
-    solve_symmetric(&ata, &atb, x, svd_tol, svd_sweeps, pinv_tol)
 }
