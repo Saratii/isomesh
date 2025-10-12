@@ -66,6 +66,7 @@ impl Default for QEFData {
     }
 }
 
+//TODO FIND REASON WHY ATA IS STORED TWICE
 #[derive(Clone)]
 pub(crate) struct QEFSolver {
     pub(crate) data: QEFData,
@@ -126,7 +127,6 @@ impl QEFSolver {
         }
         let atax = self.ata.vmul(pos);
         self.last_error = pos.dot(atax) - 2.0 * pos.dot(self.atb) + self.data.btb;
-
         if self.last_error.is_nan() {
             self.last_error = 10000.0;
         }

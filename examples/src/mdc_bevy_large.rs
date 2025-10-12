@@ -9,8 +9,11 @@ use bevy::{
         RenderPlugin,
     },
 };
-use isomesh::mdc::mdc::{mdc_mesh_generation, MeshBuffers};
-use isomesh::mdc::sampler::FunBlobSampler;
+//use isomesh::mdc::sampler::FunBlobSampler;
+use isomesh::mdc::{
+    mdc::{mdc_mesh_generation, MeshBuffers},
+    sampler::FunSurfaceSampler,
+};
 
 fn main() {
     App::new()
@@ -36,9 +39,9 @@ fn setup_mdc(
 ) {
     //create sphere
     let resolution = 512;
-    let fun_blob = FunBlobSampler::new(Vec3::new(0.0, 0.0, 0.0), 40.0);
+    let fun_blob = FunSurfaceSampler::new(Vec3::new(0.0, 0.0, 0.0), 40.0);
     let mut mesh_buffers = MeshBuffers::new();
-    mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, &fun_blob);
+    mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, fun_blob);
     let sphere_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((
         Mesh3d(meshes.add(sphere_mesh)),

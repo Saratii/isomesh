@@ -1,13 +1,14 @@
 // https://github.com/Lin20/isosurface/tree/master/Isosurface/Isosurface/ManifoldDC
 
 use glam::Vec3;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::thread;
 
 use crate::mdc::mdc::MeshBuffers;
 use crate::mdc::qef_solver::QEFSolver;
@@ -37,7 +38,6 @@ pub enum NodeType {
 pub(crate) struct Vertex {
     pub(crate) parent: Option<Arc<Mutex<Vertex>>>,
     pub(crate) index: i32,
-    pub(crate) collapsible: bool,
     pub(crate) qef: Option<QEFSolver>,
     pub(crate) normal: Vec3,
     pub(crate) surface_index: i32,
@@ -53,7 +53,6 @@ impl Clone for Vertex {
         Vertex {
             parent: self.parent.clone(),
             index: self.index,
-            collapsible: self.collapsible,
             qef: self.qef.clone(),
             normal: self.normal,
             surface_index: self.surface_index,
@@ -71,7 +70,6 @@ impl Vertex {
         Vertex {
             parent: None,
             index: -1,
-            collapsible: true,
             qef: None,
             normal: Vec3::ZERO,
             surface_index: -1,
@@ -99,7 +97,7 @@ pub(crate) struct OctreeNode {
     pub(crate) index: i32,
     pub(crate) position: Vec3,
     pub(crate) size: i32,
-    pub(crate) children: Vec<Option<Box<OctreeNode>>>,
+    pub(crate) children: [Option<Box<OctreeNode>>; 8],
     pub(crate) node_type: NodeType,
     pub(crate) vertices: Vec<Arc<Mutex<Vertex>>>,
     pub(crate) corners: u8,
@@ -114,7 +112,7 @@ impl OctreeNode {
             index: 0,
             position: Vec3::ZERO,
             size: 0,
-            children: vec![None, None, None, None, None, None, None, None],
+            children: [None, None, None, None, None, None, None, None],
             node_type: NodeType::None,
             vertices: Vec::new(),
             corners: 0,
@@ -127,7 +125,7 @@ impl OctreeNode {
             index: 0,
             position,
             size,
-            children: vec![None, None, None, None, None, None, None, None],
+            children: [None, None, None, None, None, None, None, None],
             node_type,
             vertices: Vec::new(),
             corners: 0,
@@ -147,25 +145,25 @@ impl OctreeNode {
         &mut self,
         size: i32,
         mesh_buffers: &mut MeshBuffers,
-        sampler: &S,
+        sampler: Arc<S>,
     ) where
-        S: Sampler + Send + Sync + Clone + 'static,
+        S: Sampler + Send + Sync + 'static,
     {
         self.index = 0;
         self.position = Vec3::splat(-(size as f32) * 0.5);
         self.size = size;
         self.node_type = NodeType::Internal;
-        self.children = vec![None, None, None, None, None, None, None, None];
+        self.children = [None, None, None, None, None, None, None, None];
         self.vertices = Vec::new();
         self.child_index = 0;
         let mut n_index = 1;
-        self.construct_nodes(mesh_buffers, &mut n_index, 4, sampler);
+        self.construct_nodes(mesh_buffers, &mut n_index, 4, &sampler);
     }
 
     pub(crate) fn generate_vertex_buffer(&self, mesh_buffers: &mut MeshBuffers) {
         if self.node_type != NodeType::Leaf {
-            for i in 0..8 {
-                if let Some(ref child) = self.children[i] {
+            for child_opt in &self.children {
+                if let Some(child) = child_opt {
                     child.generate_vertex_buffer(mesh_buffers);
                 }
             }
@@ -198,10 +196,10 @@ impl OctreeNode {
         mesh_buffers: &mut MeshBuffers,
         n_index: &mut i32,
         threaded: i32,
-        sampler: &S,
+        sampler: &Arc<S>,
     ) -> bool
     where
-        S: Sampler + Send + Sync + Clone + 'static,
+        S: Sampler + Send + Sync + 'static,
     {
         if self.size == 1 {
             return self.construct_leaf(n_index, sampler);
@@ -210,40 +208,31 @@ impl OctreeNode {
         let child_size = self.size / 2;
         let mut has_children = false;
         if threaded > 0 && self.size > 2 {
-            let mut handles = Vec::new();
-            let mut return_values = vec![false; 8];
-            for i in 0..8 {
-                self.index = *n_index;
-                *n_index += 1;
-                let child_pos = T_CORNER_DELTAS[i];
-                let mut child = Box::new(OctreeNode::with_params(
-                    self.position + child_pos * child_size as f32,
-                    child_size,
-                    NodeType::Internal,
-                ));
-                child.child_index = i as i32;
-                let sampler_clone = (*sampler).clone();
-                let handle = thread::spawn(move || {
-                    let mut temp = 0;
-                    let mut temp_buffers = MeshBuffers {
-                        positions: Vec::new(),
-                        normals: Vec::new(),
-                        colors: Vec::new(),
-                        indices: Vec::new(),
-                    };
-                    let result = child.construct_nodes(
-                        &mut temp_buffers,
-                        &mut temp,
-                        threaded - 1,
-                        &sampler_clone,
-                    );
-                    (result, child, temp_buffers)
-                });
-                handles.push(handle);
-            }
-            for (i, handle) in handles.into_iter().enumerate() {
-                let (result, child, _temp_buffers) = handle.join().unwrap();
-                return_values[i] = result;
+            let results: Vec<_> = (0..8)
+                .into_par_iter()
+                .map_init(
+                    || Arc::clone(sampler),
+                    |sampler_clone, i| {
+                        let mut temp_index = 0;
+                        let mut temp_buffers = MeshBuffers::default();
+                        let child_pos = T_CORNER_DELTAS[i];
+                        let mut child = Box::new(OctreeNode::with_params(
+                            self.position + child_pos * child_size as f32,
+                            child_size,
+                            NodeType::Internal,
+                        ));
+                        child.child_index = i as i32;
+                        let result = child.construct_nodes(
+                            &mut temp_buffers,
+                            &mut temp_index,
+                            threaded - 1,
+                            &sampler_clone,
+                        );
+                        (i, result, child)
+                    },
+                )
+                .collect();
+            for (i, result, child) in results {
                 if result {
                     self.children[i] = Some(child);
                     has_children = true;
@@ -260,17 +249,16 @@ impl OctreeNode {
                     NodeType::Internal,
                 ));
                 child.child_index = i as i32;
-
                 if child.construct_nodes(mesh_buffers, n_index, 0, sampler) {
-                    has_children = true;
                     self.children[i] = Some(child);
+                    has_children = true;
                 }
             }
         }
         has_children
     }
 
-    fn construct_leaf<S>(&mut self, index: &mut i32, sampler: &S) -> bool
+    fn construct_leaf<S>(&mut self, index: &mut i32, sampler: &Arc<S>) -> bool
     where
         S: Sampler,
     {
@@ -332,7 +320,6 @@ impl OctreeNode {
                 );
                 let n = get_normal(intersection, sampler);
                 normal += n;
-
                 if let Some(ref mut qef) = vertex.qef {
                     qef.add(intersection, n);
                 }
@@ -342,7 +329,6 @@ impl OctreeNode {
             normal = normal.normalize();
             vertex.index = -1;
             vertex.parent = None;
-            vertex.collapsible = true;
             vertex.normal = normal;
             vertex.euler = 1;
             vertex.eis = Some(ei);
@@ -556,23 +542,25 @@ impl OctreeNode {
                     return;
                 }
                 let v = node.vertices[index].lock().unwrap();
-                let mut highest = (*v).clone();
+                let mut highest_index = v.index;
+                let mut highest_parent = v.parent.clone();
                 loop {
-                    let parent_arc = match &highest.parent {
-                        Some(arc) => Arc::clone(arc),
-                        None => break,
-                    };
-                    let parent = parent_arc.lock().unwrap();
-                    if parent.error <= threshold
-                        && (!Self::get_enforce_manifold()
-                            || (parent.euler == 1 && parent.face_prop2))
-                    {
-                        highest = (*parent).clone();
+                    if let Some(parent_arc) = highest_parent.take() {
+                        let parent = parent_arc.lock().unwrap();
+                        if parent.error <= threshold
+                            && (!Self::get_enforce_manifold()
+                                || (parent.euler == 1 && parent.face_prop2))
+                        {
+                            highest_index = parent.index;
+                            highest_parent = parent.parent.clone();
+                        } else {
+                            break;
+                        }
                     } else {
                         break;
                     }
                 }
-                indices[i] = highest.index;
+                indices[i] = highest_index;
             }
         }
         if sign_changed {
@@ -647,13 +635,10 @@ impl OctreeNode {
         }
         let mut signs = [-1i32; 8];
         let mut mid_sign = -1i32;
-        let mut _is_collapsible = true;
         for i in 0..8 {
             if let Some(ref mut child) = self.children[i] {
                 child.cluster_cell(error);
-                if child.node_type == NodeType::Internal {
-                    _is_collapsible = false;
-                } else {
+                if child.node_type != NodeType::Internal {
                     mid_sign = ((child.corners >> (7 - i)) & 1) as i32;
                     signs[i] = ((child.corners >> i) & 1) as i32;
                 }
@@ -723,7 +708,6 @@ impl OctreeNode {
                 }
             }
         }
-        let mut _clustered_count = 0;
         if !collected_vertices.is_empty() {
             for i in 0..=highest_index {
                 let mut qef = QEFSolver::new();
@@ -778,11 +762,8 @@ impl OctreeNode {
                 new_vertex.face_prop2 = face_prop2;
                 if let Some(ref mut qef) = new_vertex.qef {
                     qef.solve(1e-6, 4, 1e-6);
-                    let err = qef.get_error();
-                    new_vertex.collapsible = err <= error;
-                    new_vertex.error = err;
+                    new_vertex.error = qef.get_error();
                 }
-                _clustered_count += 1;
                 let new_vertex_arc = Arc::new(Mutex::new(new_vertex));
                 for v_arc in &collected_vertices {
                     let mut v = v_arc.lock().unwrap();
@@ -871,16 +852,18 @@ impl OctreeNode {
         surface_index: &mut i32,
         collected_vertices: &mut Vec<Arc<Mutex<Vertex>>>,
     ) {
-        let all_not_internal = nodes
-            .iter()
-            .all(|node| node.map_or(true, |n| n.node_type != NodeType::Internal));
-
-        if all_not_internal {
+        if nodes[0].is_none() || nodes[1].is_none() || nodes[2].is_none() || nodes[3].is_none() {
+            return;
+        }
+        if nodes[0].unwrap().node_type == NodeType::Leaf
+            && nodes[1].unwrap().node_type == NodeType::Leaf
+            && nodes[2].unwrap().node_type == NodeType::Leaf
+            && nodes[3].unwrap().node_type == NodeType::Leaf
+        {
             Self::cluster_indexes(nodes, direction, surface_index, collected_vertices);
         } else {
             for i in 0..2 {
                 let mut edge_nodes = [None, None, None, None];
-
                 for j in 0..4 {
                     if let Some(node) = nodes[j] {
                         if node.node_type == NodeType::Leaf {
@@ -913,10 +896,8 @@ impl OctreeNode {
         }
         let mut vertices: [Option<Arc<Mutex<Vertex>>>; 4] = [None, None, None, None];
         let mut v_count = 0;
-        let mut _node_count = 0;
         for i in 0..4 {
             if let Some(node) = nodes[i] {
-                _node_count += 1;
                 let edge = T_PROCESS_EDGE_MASK[direction as usize][i];
                 let c1 = T_EDGE_PAIRS[edge as usize][0];
                 let c2 = T_EDGE_PAIRS[edge as usize][1];
@@ -943,18 +924,14 @@ impl OctreeNode {
                 if !skip && index < node.vertices.len() {
                     let mut vertex_arc = Arc::clone(&node.vertices[index]);
                     loop {
-                        let has_parent = {
-                            let v = vertex_arc.lock().unwrap();
-                            v.parent.is_some()
-                        };
-                        if has_parent {
-                            let parent_arc = {
-                                let v = vertex_arc.lock().unwrap();
-                                Arc::clone(v.parent.as_ref().unwrap())
-                            };
-                            vertex_arc = parent_arc;
-                        } else {
-                            break;
+                        let v = vertex_arc.lock().unwrap();
+                        match v.parent.as_ref() {
+                            Some(parent) => {
+                                let new_arc = Arc::clone(parent);
+                                drop(v);
+                                vertex_arc = new_arc;
+                            }
+                            None => break,
                         }
                     }
                     vertices[i] = Some(vertex_arc);
@@ -987,17 +964,11 @@ impl OctreeNode {
         }
         for i in 0..4 {
             if let Some(ref v_arc) = vertices[i] {
-                let should_collect = {
-                    let v = v_arc.lock().unwrap();
-                    v.surface_index == -1
-                };
-                if should_collect {
+                let mut v = v_arc.lock().unwrap();
+                if v.surface_index == -1 {
                     collected_vertices.push(Arc::clone(v_arc));
                 }
-                {
-                    let mut v = v_arc.lock().unwrap();
-                    v.surface_index = surface_index;
-                }
+                v.surface_index = surface_index;
             }
         }
     }

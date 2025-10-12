@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use glam::Vec3;
 
 #[allow(dead_code)]
@@ -68,7 +70,7 @@ pub fn blend(a: f32, b: f32, k: f32) -> f32 {
     ((a_k * b_k) / (a_k + b_k)).powf(1.0 / k)
 }
 
-pub(crate) fn get_normal<S>(v: Vec3, sampler: &S) -> Vec3
+pub(crate) fn get_normal<S>(v: Vec3, sampler: &Arc<S>) -> Vec3
 where
     S: Sampler,
 {

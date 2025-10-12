@@ -1,6 +1,8 @@
 // Manifold Dual Contouring
 // https://github.com/Lin20/isosurface/tree/master/Isosurface/Isosurface/ManifoldDC
 
+use std::sync::Arc;
+
 use glam::Vec3;
 
 use crate::mdc::{octree::OctreeNode, sampler::Sampler};
@@ -40,13 +42,13 @@ pub fn mdc_mesh_generation<S>(
     flat_shading: bool,
     resolution: i32,
     enforce_manifold: bool,
-    sampler: &S,
+    sampler: S,
 ) where
-    S: Sampler + Send + Sync + Clone + 'static,
+    S: Sampler + Send + Sync + 'static,
 {
     OctreeNode::set_enforce_manifold(enforce_manifold);
     let mut tree = Box::new(OctreeNode::new());
-    tree.construct_base(resolution, mesh_buffers, sampler);
+    tree.construct_base(resolution, mesh_buffers, Arc::new(sampler));
     tree.cluster_cell_base(0.0);
     tree.generate_vertex_buffer(mesh_buffers);
     calculate_indexes(&tree, threshold, mesh_buffers, flat_shading);
@@ -97,8 +99,7 @@ pub(crate) fn calculate_indexes(
                 )
             };
             let nc = n * 0.5 + Vec3::ONE * 0.5;
-            let nc_normalized = nc.normalize();
-            let c = [nc_normalized.x, nc_normalized.y, nc_normalized.z, 1.0];
+            let c = [nc.x, nc.y, nc.z, 1.0];
             let normal = [n.x, n.y, n.z];
             let idx0 = (mesh_buffers.indices[i + 0] & 0x0FFFFFFF) as usize;
             let idx1 = (mesh_buffers.indices[i + 1] & 0x0FFFFFFF) as usize;
@@ -177,37 +178,21 @@ mod tests {
         let resolution = 16;
         let mut mesh_buffers = MeshBuffers::new();
         let sphere = SphereSampler::new(Vec3::new(0.0, 0.0, 0.0), 5.0);
-        mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, &sphere);
+        mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, sphere);
         // Test positions
         assert_eq!(mesh_buffers.positions.len(), EXPECTED_POSITIONS.len());
         for (i, expected_pos) in EXPECTED_POSITIONS.iter().enumerate() {
-            let actual_pos = [
-                mesh_buffers.positions[i][0],
-                mesh_buffers.positions[i][1],
-                mesh_buffers.positions[i][2],
-            ];
-            assert_eq!(actual_pos, *expected_pos);
+            assert_eq!(mesh_buffers.positions[i], *expected_pos);
         }
         // Test normals
         assert_eq!(mesh_buffers.normals.len(), EXPECTED_NORMALS.len());
         for (i, expected_normal) in EXPECTED_NORMALS.iter().enumerate() {
-            let actual_normal = [
-                mesh_buffers.normals[i][0],
-                mesh_buffers.normals[i][1],
-                mesh_buffers.normals[i][2],
-            ];
-            assert_eq!(actual_normal, *expected_normal);
+            assert_eq!(mesh_buffers.normals[i], *expected_normal);
         }
         // Test colors
         assert_eq!(mesh_buffers.colors.len(), EXPECTED_COLORS.len());
         for (i, expected_color) in EXPECTED_COLORS.iter().enumerate() {
-            let actual_color = [
-                mesh_buffers.colors[i][0],
-                mesh_buffers.colors[i][1],
-                mesh_buffers.colors[i][2],
-                mesh_buffers.colors[i][3],
-            ];
-            assert_eq!(actual_color, *expected_color);
+            assert_eq!(mesh_buffers.colors[i], *expected_color);
         }
         // Test indices
         assert_eq!(mesh_buffers.indices.len(), EXPECTED_INDICES.len());
