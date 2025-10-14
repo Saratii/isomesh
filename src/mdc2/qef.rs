@@ -4,17 +4,17 @@ use std::cell::Cell;
 use crate::mdc2::solver::LevenQefSolver;
 
 #[derive(Clone)]
-pub struct QefData {
-    pub mat3x3_tri_ata: [f32; 6],
-    pub atb: Vec4,
-    pub mass_point: Vec4,
+pub(crate) struct QefData {
+    pub(crate) mat3x3_tri_ata: [f32; 6],
+    pub(crate) atb: Vec4,
+    pub(crate) mass_point: Vec4,
     x: Cell<Vec4>,
     solver: LevenQefSolver,
     btb: f32,
 }
 
 impl QefData {
-    pub fn new(solver: LevenQefSolver) -> Self {
+    pub(crate) fn new(solver: LevenQefSolver) -> Self {
         QefData {
             mat3x3_tri_ata: [0.0; 6],
             atb: Vec4::ZERO,
@@ -25,7 +25,7 @@ impl QefData {
         }
     }
 
-    pub fn add(&mut self, rhs: &QefData) {
+    pub(crate) fn add(&mut self, rhs: &QefData) {
         for i in 0..6 {
             self.mat3x3_tri_ata[i] += rhs.mat3x3_tri_ata[i];
         }
@@ -34,18 +34,21 @@ impl QefData {
         self.mass_point += rhs.mass_point;
     }
 
-    pub fn qef_add_point3(&mut self, p: Vec3, mut n: Vec3) {
+    pub(crate) fn qef_add_point3(&mut self, p: Vec3, mut n: Vec3) {
         n = n.normalize();
-        self.mat3x3_tri_ata[0] += n.x * n.x;
-        self.mat3x3_tri_ata[1] += n.x * n.y;
-        self.mat3x3_tri_ata[2] += n.x * n.z;
-        self.mat3x3_tri_ata[3] += n.y * n.y;
-        self.mat3x3_tri_ata[4] += n.y * n.z;
-        self.mat3x3_tri_ata[5] += n.z * n.z;
-        let dot = n.x * p.x + n.y * p.y + n.z * p.z;
-        self.atb.x += dot * n.x;
-        self.atb.y += dot * n.y;
-        self.atb.z += dot * n.z;
+        let nx = n.x;
+        let ny = n.y;
+        let nz = n.z;
+        self.mat3x3_tri_ata[0] += nx * nx;
+        self.mat3x3_tri_ata[1] += nx * ny;
+        self.mat3x3_tri_ata[2] += nx * nz;
+        self.mat3x3_tri_ata[3] += ny * ny;
+        self.mat3x3_tri_ata[4] += ny * nz;
+        self.mat3x3_tri_ata[5] += nz * nz;
+        let dot = nx * p.x + ny * p.y + nz * p.z;
+        self.atb.x += dot * nx;
+        self.atb.y += dot * ny;
+        self.atb.z += dot * nz;
         self.btb += dot * dot;
         self.mass_point.x += p.x;
         self.mass_point.y += p.y;
@@ -53,7 +56,7 @@ impl QefData {
         self.mass_point.w += 1.0;
     }
 
-    pub fn solve(&self) -> Vec4 {
+    pub(crate) fn solve(&self) -> Vec4 {
         let result = self
             .solver
             .solve(&self.mat3x3_tri_ata, self.atb, self.mass_point);
@@ -61,7 +64,7 @@ impl QefData {
         result
     }
 
-    pub fn get_error(&self) -> f32 {
+    pub(crate) fn get_error(&self) -> f32 {
         self.get_error_for(self.x.get())
     }
 

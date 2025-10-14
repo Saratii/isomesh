@@ -10,14 +10,8 @@ use bevy::{
     },
 };
 use isomesh::{
-    mdc::sampler::{CuboidSampler, Sampler, SphereSampler},
-    mdc2::{
-        mdc::{
-            build_octree, cluster_cell_base, generate_vertex_buffer, mdc_mesh_generation,
-            process_cell,
-        },
-        octree::MeshVertex,
-    },
+    mdc::sampler::{CuboidSampler, SphereSampler},
+    mdc2::{mdc::mdc_mesh_generation, octree::MeshVertex},
 };
 
 fn main() {

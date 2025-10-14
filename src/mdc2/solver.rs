@@ -10,12 +10,12 @@ impl LevenQefSolver {
     pub fn new() -> Self {
         LevenQefSolver {
             svd_num_sweeps: 10,
-            psuedo_inverse_threshold: 0.1_f32,
+            psuedo_inverse_threshold: 0.1,
         }
     }
 
     fn rsqrt(&self, a: f32) -> f32 {
-        a.powf(-0.5_f32)
+        a.powf(-0.5)
     }
 
     fn svd_mul_matrix_vec(&self, mat3x3_a: [[f32; 3]; 3], b: Vec4) -> Vec4 {
@@ -43,15 +43,15 @@ impl LevenQefSolver {
     }
 
     fn givens_coeffs_sym(&self, a_pp: f32, a_pq: f32, a_qq: f32, cs: &mut Vec2) {
-        if a_pq == 0.0_f32 {
-            cs.x = 1.0_f32;
-            cs.y = 0.0_f32;
+        if a_pq == 0.0 {
+            cs.x = 1.0;
+            cs.y = 0.0;
             return;
         }
-        let tau = (a_qq - a_pp) / (2.0_f32 * a_pq);
-        let stt = (1.0_f32 + tau * tau).sqrt();
-        let tan = 1.0_f32 / if tau >= 0.0_f32 { tau + stt } else { tau - stt };
-        cs.x = self.rsqrt(1.0_f32 + tan * tan);
+        let tau = (a_qq - a_pp) / (2.0 * a_pq);
+        let stt = (1.0 + tau * tau).sqrt();
+        let tan = 1.0 / if tau >= 0.0 { tau + stt } else { tau - stt };
+        cs.x = self.rsqrt(1.0 + tan * tan);
         cs.y = tan * (cs.x);
     }
 
@@ -65,7 +65,7 @@ impl LevenQefSolver {
     fn svd_rotateq_xy(&self, xya: &mut Vec3, c: f32, s: f32) {
         let cc = c * c;
         let ss = s * s;
-        let mx = 2.0_f32 * c * s * (xya.z);
+        let mx = 2.0 * c * s * (xya.z);
         let u = xya.x;
         let v = xya.y;
         xya.x = cc * u - mx + ss * v;
@@ -79,10 +79,9 @@ impl LevenQefSolver {
         a: usize,
         b: usize,
     ) {
-        if mat3x3_vtav[a][b] == 0.0_f32 {
+        if mat3x3_vtav[a][b] == 0.0 {
             return;
         }
-
         let mut cs = Vec2::ZERO;
         self.givens_coeffs_sym(
             mat3x3_vtav[a][a],
@@ -90,13 +89,11 @@ impl LevenQefSolver {
             mat3x3_vtav[b][b],
             &mut cs,
         );
-
         let mut xyz = Vec3::new(mat3x3_vtav[a][a], mat3x3_vtav[b][b], mat3x3_vtav[a][b]);
         self.svd_rotateq_xy(&mut xyz, cs.x, cs.y);
         mat3x3_vtav[a][a] = xyz.x;
         mat3x3_vtav[b][b] = xyz.y;
         mat3x3_vtav[a][b] = xyz.z;
-
         let mut xy = Vec2::new(
             mat3x3_vtav[0usize][3usize - b],
             mat3x3_vtav[1usize - a][2usize],
@@ -104,19 +101,15 @@ impl LevenQefSolver {
         self.svd_rotate_xy(&mut xy, cs.x, cs.y);
         mat3x3_vtav[0usize][3usize - b] = xy.x;
         mat3x3_vtav[1usize - a][2usize] = xy.y;
-
-        mat3x3_vtav[a][b] = 0.0_f32;
-
+        mat3x3_vtav[a][b] = 0.0;
         let mut xy = Vec2::new(mat3x3_v[0][a], mat3x3_v[0][b]);
         self.svd_rotate_xy(&mut xy, cs.x, cs.y);
         mat3x3_v[0][a] = xy.x;
         mat3x3_v[0][b] = xy.y;
-
         let mut xy = Vec2::new(mat3x3_v[1][a], mat3x3_v[1][b]);
         self.svd_rotate_xy(&mut xy, cs.x, cs.y);
         mat3x3_v[1][a] = xy.x;
         mat3x3_v[1][b] = xy.y;
-
         let mut xy = Vec2::new(mat3x3_v[2][a], mat3x3_v[2][b]);
         self.svd_rotate_xy(&mut xy, cs.x, cs.y);
         mat3x3_v[2][a] = xy.x;
@@ -129,15 +122,15 @@ impl LevenQefSolver {
         sigma: &mut Vec4,
         mat3x3_v: &mut [[f32; 3]; 3],
     ) {
-        let mut mat3x3_vtav = [[0.0_f32; 3]; 3];
+        let mut mat3x3_vtav = [[0.0; 3]; 3];
         mat3x3_vtav[0][0] = mat3x3_tri_a[0];
         mat3x3_vtav[0][1] = mat3x3_tri_a[1];
         mat3x3_vtav[0][2] = mat3x3_tri_a[2];
-        mat3x3_vtav[1][0] = 0.0_f32;
+        mat3x3_vtav[1][0] = 0.0;
         mat3x3_vtav[1][1] = mat3x3_tri_a[3];
         mat3x3_vtav[1][2] = mat3x3_tri_a[4];
-        mat3x3_vtav[2][0] = 0.0_f32;
-        mat3x3_vtav[2][1] = 0.0_f32;
+        mat3x3_vtav[2][0] = 0.0;
+        mat3x3_vtav[2][1] = 0.0;
         mat3x3_vtav[2][2] = mat3x3_tri_a[5];
         for _ in 0..self.svd_num_sweeps {
             self.svd_rotate(&mut mat3x3_vtav, mat3x3_v, 0, 1);
@@ -147,14 +140,14 @@ impl LevenQefSolver {
         sigma.x = mat3x3_vtav[0][0];
         sigma.y = mat3x3_vtav[1][1];
         sigma.z = mat3x3_vtav[2][2];
-        sigma.w = 0.0_f32;
+        sigma.w = 0.0;
     }
 
     fn svd_invdet(&self, x: f32, tol: f32) -> f32 {
-        if x.abs() < tol || (1.0_f32 / x).abs() < tol {
-            0.0_f32
+        if x.abs() < tol || (1.0 / x).abs() < tol {
+            0.0
         } else {
-            1.0_f32 / x
+            1.0 / x
         }
     }
 
@@ -162,48 +155,29 @@ impl LevenQefSolver {
         let d0 = self.svd_invdet(sigma.x, self.psuedo_inverse_threshold);
         let d1 = self.svd_invdet(sigma.y, self.psuedo_inverse_threshold);
         let d2 = self.svd_invdet(sigma.z, self.psuedo_inverse_threshold);
-        let mut mat3x3_o = [[0.0_f32; 3]; 3];
-        mat3x3_o[0][0] = mat3x3_v[0][0] * d0 * mat3x3_v[0][0]
-            + mat3x3_v[0][1] * d1 * mat3x3_v[0][1]
-            + mat3x3_v[0][2] * d2 * mat3x3_v[0][2];
-        mat3x3_o[0][1] = mat3x3_v[0][0] * d0 * mat3x3_v[1][0]
-            + mat3x3_v[0][1] * d1 * mat3x3_v[1][1]
-            + mat3x3_v[0][2] * d2 * mat3x3_v[1][2];
-        mat3x3_o[0][2] = mat3x3_v[0][0] * d0 * mat3x3_v[2][0]
-            + mat3x3_v[0][1] * d1 * mat3x3_v[2][1]
-            + mat3x3_v[0][2] * d2 * mat3x3_v[2][2];
-        mat3x3_o[1][0] = mat3x3_v[1][0] * d0 * mat3x3_v[0][0]
-            + mat3x3_v[1][1] * d1 * mat3x3_v[0][1]
-            + mat3x3_v[1][2] * d2 * mat3x3_v[0][2];
-        mat3x3_o[1][1] = mat3x3_v[1][0] * d0 * mat3x3_v[1][0]
-            + mat3x3_v[1][1] * d1 * mat3x3_v[1][1]
-            + mat3x3_v[1][2] * d2 * mat3x3_v[1][2];
-        mat3x3_o[1][2] = mat3x3_v[1][0] * d0 * mat3x3_v[2][0]
-            + mat3x3_v[1][1] * d1 * mat3x3_v[2][1]
-            + mat3x3_v[1][2] * d2 * mat3x3_v[2][2];
-        mat3x3_o[2][0] = mat3x3_v[2][0] * d0 * mat3x3_v[0][0]
-            + mat3x3_v[2][1] * d1 * mat3x3_v[0][1]
-            + mat3x3_v[2][2] * d2 * mat3x3_v[0][2];
-        mat3x3_o[2][1] = mat3x3_v[2][0] * d0 * mat3x3_v[1][0]
-            + mat3x3_v[2][1] * d1 * mat3x3_v[1][1]
-            + mat3x3_v[2][2] * d2 * mat3x3_v[1][2];
-        mat3x3_o[2][2] = mat3x3_v[2][0] * d0 * mat3x3_v[2][0]
-            + mat3x3_v[2][1] * d1 * mat3x3_v[2][1]
-            + mat3x3_v[2][2] * d2 * mat3x3_v[2][2];
+        let v0 = [mat3x3_v[0][0], mat3x3_v[1][0], mat3x3_v[2][0]];
+        let v1 = [mat3x3_v[0][1], mat3x3_v[1][1], mat3x3_v[2][1]];
+        let v2 = [mat3x3_v[0][2], mat3x3_v[1][2], mat3x3_v[2][2]];
+        let mut mat3x3_o = [[0.0; 3]; 3];
+        for i in 0..3 {
+            mat3x3_o[i][0] = v0[i] * d0 * v0[0] + v1[i] * d1 * v1[0] + v2[i] * d2 * v2[0];
+            mat3x3_o[i][1] = v0[i] * d0 * v0[1] + v1[i] * d1 * v1[1] + v2[i] * d2 * v2[1];
+            mat3x3_o[i][2] = v0[i] * d0 * v0[2] + v1[i] * d1 * v1[2] + v2[i] * d2 * v2[2];
+        }
         mat3x3_o
     }
 
     fn svd_solve_ata_atb(&self, mat3x3_tri_ata: &[f32; 6], atb: Vec4) -> Vec4 {
-        let mut mat3x3_v = [[0.0_f32; 3]; 3];
-        mat3x3_v[0][0] = 1.0_f32;
-        mat3x3_v[0][1] = 0.0_f32;
-        mat3x3_v[0][2] = 0.0_f32;
-        mat3x3_v[1][0] = 0.0_f32;
-        mat3x3_v[1][1] = 1.0_f32;
-        mat3x3_v[1][2] = 0.0_f32;
-        mat3x3_v[2][0] = 0.0_f32;
-        mat3x3_v[2][1] = 0.0_f32;
-        mat3x3_v[2][2] = 1.0_f32;
+        let mut mat3x3_v = [[0.0; 3]; 3];
+        mat3x3_v[0][0] = 1.0;
+        mat3x3_v[0][1] = 0.0;
+        mat3x3_v[0][2] = 0.0;
+        mat3x3_v[1][0] = 0.0;
+        mat3x3_v[1][1] = 1.0;
+        mat3x3_v[1][2] = 0.0;
+        mat3x3_v[2][0] = 0.0;
+        mat3x3_v[2][1] = 0.0;
+        mat3x3_v[2][2] = 1.0;
         let mut sigma = Vec4::ZERO;
         self.svd_solve_sym(mat3x3_tri_ata, &mut sigma, &mut mat3x3_v);
         let mat3x3_vinv = self.svd_pseudoinverse(&sigma, &mat3x3_v);
@@ -221,7 +195,7 @@ impl LevenQefSolver {
 
     pub fn solve(&self, mat3x3_tri_ata: &[f32; 6], atb: Vec4, masspoint: Vec4) -> Vec4 {
         let mut masspoint = masspoint;
-        masspoint = masspoint / masspoint.w.max(1.0_f32);
+        masspoint = masspoint / masspoint.w.max(1.0);
         let mut a_mp = self.svd_vmul_sym(mat3x3_tri_ata, masspoint);
         a_mp = atb - a_mp;
         let solved_pos = self.svd_solve_ata_atb(mat3x3_tri_ata, a_mp);

@@ -10,8 +10,8 @@ use bevy::{
     },
 };
 use isomesh::{
-    mdc::sampler::{FunSurfaceSampler, Sampler},
-    mdc2::{mdc::{build_octree, cluster_cell_base, generate_vertex_buffer, process_cell}, octree::MeshVertex},
+    mdc::sampler::FunSurfaceSampler,
+    mdc2::{mdc::mdc_mesh_generation, octree::MeshVertex},
 };
 
 fn main() {
@@ -38,18 +38,17 @@ fn setup_mdc(
 ) {
     let resolution = 512;
     let fun_blob = FunSurfaceSampler::new(Vec3::new(0.0, 0.0, 0.0), 40.0);
-    let mesh = generate_mesh_from_sampler(fun_blob, resolution);
-    if let Some(mesh) = mesh {
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.3, 0.5, 0.8),
-                unlit: true,
-                ..default()
-            })),
-            Transform::from_xyz(20.0, 0.0, -20.0),
-        ));
-    }
+    let (vertices, indexes) = mdc_mesh_generation(fun_blob, resolution);
+    let mesh = generate_bevy_mesh(vertices, indexes);
+    commands.spawn((
+        Mesh3d(meshes.add(mesh)),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.3, 0.5, 0.8),
+            unlit: true,
+            ..default()
+        })),
+        Transform::from_xyz(20.0, 0.0, -20.0),
+    ));
     // Light
     commands.spawn((
         PointLight {
@@ -69,32 +68,6 @@ fn setup_mdc(
         Camera3d::default(),
         Transform::from_xyz(60.0, 60.0, 60.0).looking_at(Vec3::new(32.0, 32.0, 32.0), Vec3::Y),
     ));
-}
-
-fn generate_mesh_from_sampler<S: Sampler>(sampler: S, resolution: i32) -> Option<Mesh> {
-    // Center the octree at origin
-    let half_res = resolution / 2;
-    let mut vertices = Vec::new();
-    let mut root = build_octree(
-        IVec3::new(-half_res, -half_res, -half_res),
-        resolution,
-        sampler,
-    );
-    cluster_cell_base(&mut root, 0.5);
-    generate_vertex_buffer(&mut root, &mut vertices);
-    let mut indexes = Vec::new();
-    let mut tri_count = Vec::new();
-    process_cell(&root, &mut indexes, &mut tri_count, 0.5, true);
-    if vertices.is_empty() || indexes.is_empty() {
-        println!("WARNING: No geometry generated!");
-        return None;
-    }
-    println!(
-        "Generated {} vertices, {} triangles",
-        vertices.len(),
-        tri_count.len()
-    );
-    Some(generate_bevy_mesh(vertices, indexes))
 }
 
 pub fn generate_bevy_mesh(vertices: Vec<MeshVertex>, indices: Vec<i32>) -> Mesh {

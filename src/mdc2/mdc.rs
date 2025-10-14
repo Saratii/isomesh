@@ -16,10 +16,7 @@ use crate::{
 use glam::{IVec3, Vec3};
 use std::cell::Cell;
 
-pub fn mdc_mesh_generation<S: Sampler>(
-    sampler: S,
-    resolution: i32,
-) -> (Vec<MeshVertex>, Vec<i32>) {
+pub fn mdc_mesh_generation<S: Sampler>(sampler: S, resolution: i32) -> (Vec<MeshVertex>, Vec<i32>) {
     let half_res = resolution / 2;
     let mut root = build_octree(
         IVec3::new(-half_res, -half_res, -half_res),
@@ -32,18 +29,10 @@ pub fn mdc_mesh_generation<S: Sampler>(
     let mut indexes = Vec::new();
     let mut tri_count = Vec::new();
     process_cell(&root, &mut indexes, &mut tri_count, 0.5, true);
-    if vertices.is_empty() || indexes.is_empty() {
-        println!("WARNING: No geometry generated!");
-    }
-    println!(
-        "Generated {} vertices, {} triangles",
-        vertices.len(),
-        tri_count.len()
-    );
     (vertices, indexes)
 }
 
-pub fn generate_vertex_buffer(node: &mut MdcOctreeNode, vertices: &mut Vec<MeshVertex>) {
+pub(crate) fn generate_vertex_buffer(node: &mut MdcOctreeNode, vertices: &mut Vec<MeshVertex>) {
     if node.node_type != OctreeNodeType::NodeLeaf {
         for i in 0..8 {
             if let Some(child) = &mut node.children[i] {
@@ -70,20 +59,18 @@ pub fn generate_vertex_buffer(node: &mut MdcOctreeNode, vertices: &mut Vec<MeshV
     }
 }
 
-pub fn build_octree<S>(min: IVec3, size: i32, sampler: S) -> MdcOctreeNode
-where
-    S: Sampler,
-{
+pub(crate) fn build_octree<S: Sampler>(min: IVec3, size: i32, sampler: S) -> MdcOctreeNode {
     let mut root = MdcOctreeNode::new(min, size, OctreeNodeType::NodeInternal, 0);
     let mut n_index = 1;
     construct_nodes(&mut root, &mut n_index, &sampler);
     root
 }
 
-pub fn construct_nodes<S>(node: &mut MdcOctreeNode, n_index: &mut i32, sampler: &S)
-where
-    S: Sampler,
-{
+pub(crate) fn construct_nodes<S: Sampler>(
+    node: &mut MdcOctreeNode,
+    n_index: &mut i32,
+    sampler: &S,
+) {
     if node.size == 1 {
         construct_leaf(node, n_index, sampler);
         return;
@@ -106,10 +93,7 @@ where
     }
 }
 
-pub fn construct_leaf<S>(leaf: &mut MdcOctreeNode, n_index: &mut i32, sampler: &S)
-where
-    S: Sampler,
-{
+pub(crate) fn construct_leaf<S: Sampler>(leaf: &mut MdcOctreeNode, n_index: &mut i32, sampler: &S) {
     if leaf.size != 1 {
         return;
     }
@@ -203,7 +187,7 @@ pub fn calculate_surface_normal<S>(p: &Vec3, sampler: &S) -> Vec3
 where
     S: Sampler,
 {
-    let h = 1.0;
+    let h = 0.001;
     let x_offset = Vec3::new(h, 0.0, 0.0);
     let y_offset = Vec3::new(0.0, h, 0.0);
     let z_offset = Vec3::new(0.0, 0.0, h);
@@ -215,7 +199,7 @@ where
     v
 }
 
-pub fn process_cell(
+pub(crate) fn process_cell(
     node: &MdcOctreeNode,
     indexes: &mut Vec<i32>,
     tri_count: &mut Vec<i32>,
@@ -261,7 +245,7 @@ pub fn process_cell(
     }
 }
 
-pub fn process_face(
+pub(crate) fn process_face(
     nodes: &[Option<&Box<MdcOctreeNode>>; 2],
     direction: usize,
     indexes: &mut Vec<i32>,
@@ -327,7 +311,7 @@ pub fn process_face(
     }
 }
 
-pub fn cluster_cell_base(node: &mut MdcOctreeNode, error: f32) {
+pub(crate) fn cluster_cell_base(node: &mut MdcOctreeNode, error: f32) {
     if node.node_type != OctreeNodeType::NodeInternal {
         return;
     }
@@ -338,6 +322,7 @@ pub fn cluster_cell_base(node: &mut MdcOctreeNode, error: f32) {
     }
 }
 pub(crate) fn cluster_cell(node: &mut MdcOctreeNode, error: f32) {
+    use std::collections::HashMap;
     if node.node_type != OctreeNodeType::NodeInternal {
         return;
     }
@@ -365,7 +350,6 @@ pub(crate) fn cluster_cell(node: &mut MdcOctreeNode, error: f32) {
     }
     let mut surface_index = 0;
     let mut collected_vertices: Vec<Box<MdcVertex>> = Vec::new();
-    let mut new_vertices: Vec<Box<MdcVertex>> = Vec::new();
     for i in 0..12 {
         let c1 = T_EDGE_PAIRS[i][0];
         let c2 = T_EDGE_PAIRS[i][1];
@@ -411,86 +395,80 @@ pub(crate) fn cluster_cell(node: &mut MdcOctreeNode, error: f32) {
             }
         }
     }
-    if !collected_vertices.is_empty() {
-        let mut i = 0;
-        while i <= highest_index {
-            let mut qef = QefData::new(LevenQefSolver::new());
-            let mut normal = Vec3::ZERO;
-            let mut count = 0;
-            let mut edges = [0; 12];
-            let mut euler = 0;
-            let mut e = 0;
-            for v in &collected_vertices {
-                if v.surface_index == i {
-                    for k in 0..3 {
-                        let edge_idx = T_EXTERNAL_EDGES[v.in_cell as usize][k];
-                        edges[edge_idx as usize] += v.eis.as_ref().unwrap()[edge_idx as usize];
-                    }
-                    for k in 0..9 {
-                        let edge_idx = T_INTERNAL_EDGES[v.in_cell as usize][k];
-                        e += v.eis.as_ref().unwrap()[edge_idx as usize];
-                    }
-                    euler += v.euler;
-                    if let Some(qef_solver) = &v.qef {
-                        qef.add(&qef_solver);
-                    }
-                    normal = normal + v.normal;
-                    count += 1;
-                }
-            }
-            if count == 0 {
-                i += 1;
-                continue;
-            }
-            let mut face_prop2 = true;
-            for f in 0..6 {
-                if !face_prop2 {
-                    break;
-                }
-                let mut intersections = 0;
-                for ei_idx in 0..4 {
-                    intersections += edges[T_FACES[f][ei_idx] as usize];
-                }
-                if !(intersections == 0 || intersections == 2) {
-                    face_prop2 = false;
-                }
-            }
-            let mut new_vertex = MdcVertex::new();
-            normal = normal / count as f32;
-            normal = normal.normalize();
-            new_vertex.normal = normal;
-            new_vertex.qef = Some(qef);
-            new_vertex.eis = Some(edges.to_vec());
-            new_vertex.euler = euler - e / 4;
-            new_vertex.in_cell = node.child_index;
-            new_vertex.face_prop2 = face_prop2;
-            if let Some(qef) = &mut new_vertex.qef {
-                let pos_vec4 = qef.solve();
-                new_vertex.pos = Vec3::new(pos_vec4.x, pos_vec4.y, pos_vec4.z);
-                let err = qef.get_error();
-                new_vertex.collapsible = err <= error;
-                new_vertex.error = err;
-            }
-            for v in &mut collected_vertices {
-                if v.surface_index == i {
-                    if v.as_ref() != &new_vertex {
-                        v.parent = Some(Box::new(new_vertex.clone()));
-                    } else {
-                        v.parent = None;
-                    }
-                }
-            }
-            new_vertices.push(Box::new(new_vertex));
-            i += 1;
-        }
-    } else {
+    if collected_vertices.is_empty() {
         return;
     }
-    for v in &mut collected_vertices {
-        v.surface_index = -1;
+    let mut surface_vertices: HashMap<i32, Vec<Box<MdcVertex>>> = HashMap::new();
+    for v in &collected_vertices {
+        surface_vertices
+            .entry(v.surface_index)
+            .or_insert_with(Vec::new)
+            .push(v.clone());
+    }
+    let mut new_vertices: Vec<Box<MdcVertex>> = Vec::new();
+    for (_, verts_for_surface) in surface_vertices.iter() {
+        if verts_for_surface.is_empty() {
+            continue;
+        }
+        let mut qef = QefData::new(LevenQefSolver::new());
+        let mut normal = Vec3::ZERO;
+        let mut count = 0;
+        let mut edges = [0; 12];
+        let mut euler = 0;
+        let mut e = 0;
+        for v in verts_for_surface {
+            for k in 0..3 {
+                let edge_idx = T_EXTERNAL_EDGES[v.in_cell as usize][k];
+                edges[edge_idx as usize] += v.eis.as_ref().unwrap()[edge_idx as usize];
+            }
+            for k in 0..9 {
+                let edge_idx = T_INTERNAL_EDGES[v.in_cell as usize][k];
+                e += v.eis.as_ref().unwrap()[edge_idx as usize];
+            }
+            euler += v.euler;
+            if let Some(qef_solver) = &v.qef {
+                qef.add(&qef_solver);
+            }
+            normal = normal + v.normal;
+            count += 1;
+        }
+        if count == 0 {
+            continue;
+        }
+        let mut face_prop2 = true;
+        for f in 0..6 {
+            if !face_prop2 {
+                break;
+            }
+            let mut intersections = 0;
+            for ei_idx in 0..4 {
+                intersections += edges[T_FACES[f][ei_idx] as usize];
+            }
+            if !(intersections == 0 || intersections == 2) {
+                face_prop2 = false;
+            }
+        }
+        let mut new_vertex = MdcVertex::new();
+        normal = normal / count as f32;
+        normal = normal.normalize();
+        new_vertex.normal = normal;
+        new_vertex.qef = Some(qef);
+        new_vertex.eis = Some(edges.to_vec());
+        new_vertex.euler = euler - e / 4;
+        new_vertex.in_cell = node.child_index;
+        new_vertex.face_prop2 = face_prop2;
+        if let Some(qef) = &mut new_vertex.qef {
+            let pos_vec4 = qef.solve();
+            new_vertex.pos = Vec3::new(pos_vec4.x, pos_vec4.y, pos_vec4.z);
+            let err = qef.get_error();
+            new_vertex.collapsible = err <= error;
+            new_vertex.error = err;
+        }
+        new_vertices.push(Box::new(new_vertex));
     }
     node.vertices = new_vertices.iter().map(|v| Some(v.clone())).collect();
 }
+
 pub(crate) fn cluster_face(
     nodes: &[Option<&Box<MdcOctreeNode>>; 2],
     direction: usize,
@@ -676,7 +654,7 @@ fn assign_surface(vertices: &mut Vec<Box<MdcVertex>>, from: i32, to: i32) {
     }
 }
 
-pub struct MdcOctreeNode {
+pub(crate) struct MdcOctreeNode {
     pub(crate) min: IVec3,
     pub(crate) size: i32,
     pub(crate) node_type: OctreeNodeType,
@@ -687,7 +665,7 @@ pub struct MdcOctreeNode {
     pub(crate) vertices: Vec<Option<Box<MdcVertex>>>,
 }
 impl MdcOctreeNode {
-    pub fn new(min: IVec3, size: i32, node_type: OctreeNodeType, child_index: i32) -> Self {
+    pub(crate) fn new(min: IVec3, size: i32, node_type: OctreeNodeType, child_index: i32) -> Self {
         MdcOctreeNode {
             min,
             size,
@@ -716,7 +694,7 @@ pub(crate) struct MdcVertex {
     pub(crate) debug_flag: bool,
 }
 impl MdcVertex {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         MdcVertex {
             qef: None,
             normal: Vec3::ZERO,
@@ -759,7 +737,7 @@ impl PartialEq for MdcVertex {
     }
 }
 
-pub fn process_edge(
+pub(crate) fn process_edge(
     nodes: &[Option<&Box<MdcOctreeNode>>; 4],
     direction: usize,
     indexes: &mut Vec<i32>,
