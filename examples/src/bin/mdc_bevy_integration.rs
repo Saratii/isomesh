@@ -1,3 +1,4 @@
+pub(crate) mod mdc2_bevy_integration;
 pub mod mdc_bevy_large;
 
 use bevy::{

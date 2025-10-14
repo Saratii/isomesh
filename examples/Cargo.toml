@@ -4,11 +4,19 @@ edition = "2021"
 
 [[bin]]
 name = "mdc_bevy_integration"
-path = "src/mdc_bevy_integration.rs"
+path = "src/bin/mdc_bevy_integration.rs"
 
 [[bin]]
 name = "mdc_bevy_large"
-path = "src/mdc_bevy_large.rs"
+path = "src/bin/mdc_bevy_large.rs"
+
+[[bin]]
+name = "mdc2_bevy_integration"
+path = "src/bin/mdc2_bevy_integration.rs"
+
+[[bin]]
+name = "mdc2_bevy_large"
+path = "src/bin/mdc2_bevy_large.rs"
 
 [dependencies]
 bevy = "0.15.3"
