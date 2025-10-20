@@ -14,7 +14,6 @@ use crate::{
     },
 };
 use glam::{IVec3, Vec3};
-use std::cell::Cell;
 
 pub fn mdc_mesh_generation<S: Sampler>(sampler: S, resolution: i32) -> (Vec<MeshVertex>, Vec<i32>) {
     let half_res = resolution / 2;
@@ -48,7 +47,7 @@ pub(crate) fn generate_vertex_buffer(node: &mut MdcOctreeNode, vertices: &mut Ve
             continue;
         }
         let v = vertex.as_mut().unwrap();
-        v.index.set(vertices.len() as i32);
+        v.index = vertices.len() as i32;
         let mut nc = v.normal * 0.5 + Vec3::new(1.0, 1.0, 1.0) * 0.5;
         nc = nc.normalize();
         let color = nc;
@@ -164,12 +163,12 @@ pub(crate) fn construct_leaf<S: Sampler>(leaf: &mut MdcOctreeNode, n_index: &mut
         }
         normal = normal / k as f32;
         normal = normal.normalize();
-        mdc_vertex.index.set(0);
+        mdc_vertex.index = 0;
         mdc_vertex.parent = None;
         mdc_vertex.collapsible = true;
         mdc_vertex.normal = normal;
         mdc_vertex.euler = 1;
-        mdc_vertex.eis = Some(ei.to_vec());
+        mdc_vertex.eis = ei;
         mdc_vertex.in_cell = leaf.child_index;
         mdc_vertex.face_prop2 = true;
         let solved = mdc_vertex.qef.as_mut().unwrap().solve();
@@ -419,11 +418,11 @@ pub(crate) fn cluster_cell(node: &mut MdcOctreeNode, error: f32) {
         for v in verts_for_surface {
             for k in 0..3 {
                 let edge_idx = T_EXTERNAL_EDGES[v.in_cell as usize][k];
-                edges[edge_idx as usize] += v.eis.as_ref().unwrap()[edge_idx as usize];
+                edges[edge_idx as usize] += v.eis[edge_idx as usize];
             }
             for k in 0..9 {
                 let edge_idx = T_INTERNAL_EDGES[v.in_cell as usize][k];
-                e += v.eis.as_ref().unwrap()[edge_idx as usize];
+                e += v.eis[edge_idx as usize];
             }
             euler += v.euler;
             if let Some(qef_solver) = &v.qef {
@@ -453,7 +452,7 @@ pub(crate) fn cluster_cell(node: &mut MdcOctreeNode, error: f32) {
         normal = normal.normalize();
         new_vertex.normal = normal;
         new_vertex.qef = Some(qef);
-        new_vertex.eis = Some(edges.to_vec());
+        new_vertex.eis = edges;
         new_vertex.euler = euler - e / 4;
         new_vertex.in_cell = node.child_index;
         new_vertex.face_prop2 = face_prop2;
@@ -565,6 +564,7 @@ pub(crate) fn cluster_edge(
         }
     }
 }
+
 pub(crate) fn cluster_indexes(
     nodes: &[Option<&Box<MdcOctreeNode>>; 4],
     direction: usize,
@@ -680,7 +680,7 @@ impl MdcOctreeNode {
 }
 pub(crate) struct MdcVertex {
     pub(crate) parent: Option<Box<MdcVertex>>,
-    pub(crate) index: Cell<i32>,
+    pub(crate) index: i32,
     pub(crate) collapsible: bool,
     pub(crate) qef: Option<QefData>,
     pub(crate) pos: Vec3,
@@ -688,7 +688,7 @@ pub(crate) struct MdcVertex {
     pub(crate) surface_index: i32,
     pub(crate) error: f32,
     pub(crate) euler: i32,
-    pub(crate) eis: Option<Vec<i32>>,
+    pub(crate) eis: [i32; 12],
     pub(crate) in_cell: i32,
     pub(crate) face_prop2: bool,
     pub(crate) debug_flag: bool,
@@ -700,11 +700,11 @@ impl MdcVertex {
             normal: Vec3::ZERO,
             pos: Vec3::ZERO,
             error: 0.0,
-            index: Cell::new(0),
+            index: 0,
             parent: None,
             collapsible: false,
             euler: 0,
-            eis: Some([0; 12].to_vec()),
+            eis: [0; 12],
             in_cell: 0,
             face_prop2: false,
             surface_index: -1,
@@ -719,7 +719,7 @@ impl Clone for MdcVertex {
             normal: self.normal,
             pos: self.pos,
             error: self.error,
-            index: Cell::new(self.index.get()),
+            index: self.index,
             parent: self.parent.as_ref().map(|p| p.clone()),
             collapsible: self.collapsible,
             euler: self.euler,
@@ -849,7 +849,7 @@ pub(crate) fn process_indexes(
                     highest = parent.as_ref();
                 }
             }
-            indices[i] = v.index.get();
+            indices[i] = v.index;
         }
     }
     if sign_changed {
