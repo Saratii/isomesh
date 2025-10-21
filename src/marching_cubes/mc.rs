@@ -121,7 +121,7 @@ fn voxel_data_from_index(
 
 pub fn mc_mesh_generation(
     mesh_buffers: &mut MeshBuffers,
-    densities: &[f32],
+    densities: &[i16],
     materials: &[u8],
     cubes_per_chunk_dim: usize,
     samples_per_chunk_dim: usize,
@@ -138,7 +138,7 @@ pub fn mc_mesh_generation(
 
 pub fn mc_mesh_generation_with_color(
     mesh_buffers: &mut MeshBuffers,
-    densities: &[f32],
+    densities: &[i16],
     materials: &[u8],
     cubes_per_chunk_dim: usize,
     samples_per_chunk_dim: usize,
@@ -209,7 +209,7 @@ fn process_cube_with_cache(
     z: usize,
     vertex_cache: &mut VertexCache,
     indices: &mut Vec<u32>,
-    densities: &[f32],
+    densities: &[i16],
     materials: &[u8],
     samples_per_chunk_dim: usize,
 ) {
@@ -430,7 +430,7 @@ fn sample_cube_values_from_sdf(
     x: usize,
     y: usize,
     z: usize,
-    densities: &[f32],
+    densities: &[i16],
     sdf_values_per_chunk_dim: usize,
 ) -> [f32; 8] {
     let get_sdf = |x: usize, y: usize, z: usize| -> f32 {
@@ -453,7 +453,7 @@ fn sample_cube_values_from_sdf(
 
 fn calculate_vertex_normal(
     point: Vec3,
-    densities: &[f32],
+    densities: &[i16],
     sdf_values_per_chunk_dim: usize,
 ) -> Vec3 {
     let epsilon = VOXEL_SIZE;
@@ -490,7 +490,7 @@ fn calculate_vertex_normal(
 
 fn sample_sdf_at_point_with_interpolation(
     point: Vec3,
-    densities: &[f32],
+    densities: &[i16],
     samples_per_chunk_dim: usize,
 ) -> f32 {
     let voxel_x = (point.x + HALF_CHUNK) / VOXEL_SIZE;
@@ -532,7 +532,7 @@ fn sample_sdf_at_point_with_interpolation(
 fn build_mesh_from_cache_and_indices(
     vertex_cache: VertexCache,
     indices: Vec<u32>,
-    densities: &[f32],
+    densities: &[i16],
     sdf_values_per_chunk_dim: usize,
     mesh_buffers: &mut MeshBuffers,
     color_provider: &dyn ColorProvider,

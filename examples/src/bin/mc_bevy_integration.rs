@@ -43,7 +43,7 @@ fn setup_mdc(
     //create sphere
     let sphere_sampler = SphereSampler::new(Vec3::ZERO, 20.0);
     let mut mesh_buffers = MeshBuffers::new();
-    let densities = sphere_sampler.bake(
+    let densities = sphere_sampler.bake_quantized(
         Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
         Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
         (
@@ -71,7 +71,7 @@ fn setup_mdc(
     //create cuboid
     let size = Vec3::new(10.0, 15.0, 20.0);
     let cuboid_sampler = CuboidSampler::new(Vec3::ZERO, size);
-    let densities = cuboid_sampler.bake(
+    let densities = cuboid_sampler.bake_quantized(
         Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
         Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
         (

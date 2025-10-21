@@ -123,6 +123,32 @@ impl SphereSampler {
         }
         baked
     }
+
+    pub fn bake_quantized(
+        &self,
+        min: Vec3,
+        max: Vec3,
+        resolution: (usize, usize, usize),
+    ) -> Vec<i16> {
+        let (res_x, res_y, res_z) = resolution;
+        let mut baked = Vec::with_capacity(res_x * res_y * res_z);
+        let step_x = (max.x - min.x) / (res_x - 1).max(1) as f32;
+        let step_y = (max.y - min.y) / (res_y - 1).max(1) as f32;
+        let step_z = (max.z - min.z) / (res_z - 1).max(1) as f32;
+        for z in 0..res_z {
+            for y in 0..res_y {
+                for x in 0..res_x {
+                    let point = Vec3::new(
+                        min.x + x as f32 * step_x,
+                        min.y + y as f32 * step_y,
+                        min.z + z as f32 * step_z,
+                    );
+                    baked.push(quantize_f32_to_i16(self.sample(point)));
+                }
+            }
+        }
+        baked
+    }
 }
 
 impl Sampler for SphereSampler {
@@ -163,6 +189,32 @@ impl CuboidSampler {
         }
         baked
     }
+
+    pub fn bake_quantized(
+        &self,
+        min: Vec3,
+        max: Vec3,
+        resolution: (usize, usize, usize),
+    ) -> Vec<i16> {
+        let (res_x, res_y, res_z) = resolution;
+        let mut baked = Vec::with_capacity(res_x * res_y * res_z);
+        let step_x = (max.x - min.x) / (res_x - 1).max(1) as f32;
+        let step_y = (max.y - min.y) / (res_y - 1).max(1) as f32;
+        let step_z = (max.z - min.z) / (res_z - 1).max(1) as f32;
+        for z in 0..res_z {
+            for y in 0..res_y {
+                for x in 0..res_x {
+                    let point = Vec3::new(
+                        min.x + x as f32 * step_x,
+                        min.y + y as f32 * step_y,
+                        min.z + z as f32 * step_z,
+                    );
+                    baked.push(quantize_f32_to_i16(self.sample(point)));
+                }
+            }
+        }
+        baked
+    }
 }
 
 impl Sampler for CuboidSampler {
@@ -178,4 +230,10 @@ impl<S: Sampler> Sampler for Arc<S> {
     fn sample(&self, point: Vec3) -> f32 {
         (**self).sample(point)
     }
+}
+
+#[inline]
+pub fn quantize_f32_to_i16(value: f32) -> i16 {
+    let scale = 32767.0 / 10.0; // Map [-10, 10] to [-32767, 32767]
+    (value * scale).round() as i16
 }
