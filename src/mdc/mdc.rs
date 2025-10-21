@@ -68,55 +68,49 @@ pub(crate) fn calculate_indexes(
             return;
         }
     } else {
-        let mut new_positions = Vec::new();
-        let mut new_normals = Vec::new();
-        let mut new_colors = Vec::new();
+        let mut new_positions = Vec::with_capacity(mesh_buffers.indices.len());
+        let mut new_normals = Vec::with_capacity(mesh_buffers.indices.len());
+        let mut new_colors = Vec::with_capacity(mesh_buffers.indices.len());
         let mut t_index = 0;
         let mut i = 0;
         while i < mesh_buffers.indices.len() {
             let count = tri_count[t_index];
             t_index += 1;
-            let n = if count == 1 {
-                get_normal_q(
-                    &[
-                        (mesh_buffers.indices[i + 2] & 0x0FFFFFFF) as usize,
-                        (mesh_buffers.indices[i + 0] & 0x0FFFFFFF) as usize,
-                        (mesh_buffers.indices[i + 1] & 0x0FFFFFFF) as usize,
-                    ],
-                    &mesh_buffers.positions,
-                )
-            } else {
-                get_normal_q(
-                    &[
-                        (mesh_buffers.indices[i + 2] & 0x0FFFFFFF) as usize,
-                        (mesh_buffers.indices[i + 0] & 0x0FFFFFFF) as usize,
-                        (mesh_buffers.indices[i + 1] & 0x0FFFFFFF) as usize,
-                        (mesh_buffers.indices[i + 5] & 0x0FFFFFFF) as usize,
-                        (mesh_buffers.indices[i + 3] & 0x0FFFFFFF) as usize,
-                        (mesh_buffers.indices[i + 4] & 0x0FFFFFFF) as usize,
-                    ],
-                    &mesh_buffers.positions,
-                )
-            };
-            let nc = n * 0.5 + Vec3::ONE * 0.5;
-            let c = [nc.x, nc.y, nc.z, 1.0];
-            let normal = [n.x, n.y, n.z];
             let idx0 = (mesh_buffers.indices[i + 0] & 0x0FFFFFFF) as usize;
             let idx1 = (mesh_buffers.indices[i + 1] & 0x0FFFFFFF) as usize;
             let idx2 = (mesh_buffers.indices[i + 2] & 0x0FFFFFFF) as usize;
             new_positions.push(mesh_buffers.positions[idx0]);
-            new_normals.push(normal);
-            new_colors.push(c);
             new_positions.push(mesh_buffers.positions[idx1]);
-            new_normals.push(normal);
-            new_colors.push(c);
             new_positions.push(mesh_buffers.positions[idx2]);
-            new_normals.push(normal);
-            new_colors.push(c);
-            if count > 1 {
+            if count == 1 {
+                let n = get_normal_q(&[idx2, idx0, idx1], &mesh_buffers.positions);
+                let nc = n * 0.5 + Vec3::ONE * 0.5;
+                let c = [nc.x, nc.y, nc.z, 1.0];
+                let normal = [n.x, n.y, n.z];
+                new_normals.push(normal);
+                new_colors.push(c);
+                new_normals.push(normal);
+                new_colors.push(c);
+                new_normals.push(normal);
+                new_colors.push(c);
+                i += 3;
+            } else {
                 let idx3 = (mesh_buffers.indices[i + 3] & 0x0FFFFFFF) as usize;
                 let idx4 = (mesh_buffers.indices[i + 4] & 0x0FFFFFFF) as usize;
                 let idx5 = (mesh_buffers.indices[i + 5] & 0x0FFFFFFF) as usize;
+                let n = get_normal_q(
+                    &[idx2, idx0, idx1, idx5, idx3, idx4],
+                    &mesh_buffers.positions,
+                );
+                let nc = n * 0.5 + Vec3::ONE * 0.5;
+                let c = [nc.x, nc.y, nc.z, 1.0];
+                let normal = [n.x, n.y, n.z];
+                new_normals.push(normal);
+                new_colors.push(c);
+                new_normals.push(normal);
+                new_colors.push(c);
+                new_normals.push(normal);
+                new_colors.push(c);
                 new_positions.push(mesh_buffers.positions[idx3]);
                 new_normals.push(normal);
                 new_colors.push(c);
@@ -126,9 +120,8 @@ pub(crate) fn calculate_indexes(
                 new_positions.push(mesh_buffers.positions[idx5]);
                 new_normals.push(normal);
                 new_colors.push(c);
-                i += 3;
+                i += 6;
             }
-            i += 3;
         }
         let vertex_count = new_positions.len();
         mesh_buffers.positions = new_positions;
@@ -138,7 +131,7 @@ pub(crate) fn calculate_indexes(
     }
 }
 
-fn get_normal_q(indexes: &[usize], vertices_buffer: &Vec<[f32; 3]>) -> Vec3 {
+fn get_normal_q(indexes: &[usize], vertices_buffer: &[[f32; 3]]) -> Vec3 {
     let p0 = Vec3::from_array(vertices_buffer[indexes[0]]);
     let p1 = Vec3::from_array(vertices_buffer[indexes[1]]);
     let p2 = Vec3::from_array(vertices_buffer[indexes[2]]);

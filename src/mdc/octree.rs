@@ -172,18 +172,22 @@ impl OctreeNode {
             return;
         }
         for i in 0..self.vertices.len() {
-            let mut vertex = self.vertices[i].lock().unwrap();
-            vertex.index = mesh_buffers.positions.len() as i32;
-            let nc = vertex.normal * 0.5 + Vec3::ONE * 0.5;
+            let mut vertex_lock = self.vertices[i].lock().unwrap();
+            vertex_lock.index = mesh_buffers.positions.len() as i32;
+            let position = vertex_lock.qef.solve(1e-6, 4, 1e-6);
+            let nc = vertex_lock.normal * 0.5 + Vec3::ONE * 0.5;
+            let normal = [
+                vertex_lock.normal.x,
+                vertex_lock.normal.y,
+                vertex_lock.normal.z,
+            ];
+            drop(vertex_lock);
             let nc_normalized = nc.normalize();
             let color = [nc_normalized.x, nc_normalized.y, nc_normalized.z, 1.0];
-            let position = vertex.qef.solve(1e-6, 4, 1e-6);
             mesh_buffers
                 .positions
                 .push([position.x, position.y, position.z]);
-            mesh_buffers
-                .normals
-                .push([vertex.normal.x, vertex.normal.y, vertex.normal.z]);
+            mesh_buffers.normals.push(normal);
             mesh_buffers.colors.push(color);
         }
     }
@@ -278,7 +282,7 @@ impl OctreeNode {
             return false;
         }
         let v_count = TRANSFORMED_VERTICES_NUMBER_TABLE[corners as usize];
-        let mut v_edges = vec![vec![-1i32; 13]; v_count as usize];
+        let mut v_edges = vec![[-1; 13]; v_count as usize];
         self.vertices = Vec::with_capacity(v_count as usize);
         let mut v_index = 0;
         let mut e_index = 0;
@@ -653,8 +657,7 @@ impl OctreeNode {
             let c2 = T_EDGE_PAIRS[i][1];
             face_nodes[0] = self.children[c1 as usize].as_ref().map(|b| b.as_ref());
             face_nodes[1] = self.children[c2 as usize].as_ref().map(|b| b.as_ref());
-
-            Self::cluster_face(
+            cluster_face(
                 &face_nodes,
                 T_EDGE_PAIRS[i][2] as i32,
                 &mut surface_index,
@@ -676,7 +679,7 @@ impl OctreeNode {
                     .as_ref()
                     .map(|b| b.as_ref()),
             ];
-            Self::cluster_edge(
+            cluster_edge(
                 &edge_nodes,
                 T_CELL_PROC_EDGE_MASK[i][4] as i32,
                 &mut surface_index,
@@ -700,74 +703,73 @@ impl OctreeNode {
                 }
             }
         }
-        if !collected_vertices.is_empty() {
-            for i in 0..=highest_index {
-                let mut qef = QEFSolver::new();
-                let mut normal = Vec3::ZERO;
-                let mut count = 0;
-                let mut edges = [0i32; 12];
-                let mut euler = 0;
-                let mut e = 0;
-                for v_arc in &collected_vertices {
-                    let v = v_arc.lock().unwrap();
-                    if v.surface_index == i {
-                        if let Some(ref eis) = v.eis {
-                            for k in 0..3 {
-                                let edge = T_EXTERNAL_EDGES[v.in_cell as usize][k];
-                                edges[edge as usize] += eis[edge as usize];
-                            }
-                            for k in 0..9 {
-                                let edge = T_INTERNAL_EDGES[v.in_cell as usize][k];
-                                e += eis[edge as usize];
-                            }
-                        }
-                        euler += v.euler;
-                        qef.data.add(&v.qef.data);
-                        qef.has_solution = false;
-                        normal += v.normal;
-                        count += 1;
-                    }
-                }
-                if count == 0 {
-                    continue;
-                }
-                let mut face_prop2 = true;
-                for f in 0..6 {
-                    let mut intersections = 0;
-                    for ei in 0..4 {
-                        intersections += edges[T_FACES[f][ei] as usize];
-                    }
-                    if intersections != 0 && intersections != 2 {
-                        face_prop2 = false;
-                        break;
-                    }
-                }
-                let mut new_vertex = Vertex::new();
-                normal /= count as f32;
-                normal = normal.normalize();
-                new_vertex.normal = normal;
-                new_vertex.qef = qef;
-                new_vertex.eis = Some(edges);
-                new_vertex.euler = euler - e / 4;
-                new_vertex.in_cell = self.child_index;
-                new_vertex.face_prop2 = face_prop2;
-                new_vertex.qef.solve(1e-6, 4, 1e-6);
-                new_vertex.error = new_vertex.qef.get_error();
-                let new_vertex_arc = Arc::new(Mutex::new(new_vertex));
-                for v_arc in &collected_vertices {
-                    let mut v = v_arc.lock().unwrap();
-                    if v.surface_index == i {
-                        if !Arc::ptr_eq(v_arc, &new_vertex_arc) {
-                            v.parent = Some(Arc::clone(&new_vertex_arc));
-                        } else {
-                            v.parent = None;
-                        }
-                    }
-                }
-                new_vertices.push(new_vertex_arc);
-            }
-        } else {
+        if collected_vertices.is_empty() {
             return;
+        }
+        for i in 0..=highest_index {
+            let mut qef = QEFSolver::new();
+            let mut normal = Vec3::ZERO;
+            let mut count = 0;
+            let mut edges = [0i32; 12];
+            let mut euler = 0;
+            let mut e = 0;
+            for v_arc in &collected_vertices {
+                let v = v_arc.lock().unwrap();
+                if v.surface_index == i {
+                    if let Some(ref eis) = v.eis {
+                        for k in 0..3 {
+                            let edge = T_EXTERNAL_EDGES[v.in_cell as usize][k];
+                            edges[edge as usize] += eis[edge as usize];
+                        }
+                        for k in 0..9 {
+                            let edge = T_INTERNAL_EDGES[v.in_cell as usize][k];
+                            e += eis[edge as usize];
+                        }
+                    }
+                    euler += v.euler;
+                    qef.data.add(&v.qef.data);
+                    qef.has_solution = false;
+                    normal += v.normal;
+                    count += 1;
+                }
+            }
+            if count == 0 {
+                continue;
+            }
+            let mut face_prop2 = true;
+            for f in 0..6 {
+                let mut intersections = 0;
+                for ei in 0..4 {
+                    intersections += edges[T_FACES[f][ei] as usize];
+                }
+                if intersections != 0 && intersections != 2 {
+                    face_prop2 = false;
+                    break;
+                }
+            }
+            let mut new_vertex = Vertex::new();
+            normal /= count as f32;
+            normal = normal.normalize();
+            new_vertex.normal = normal;
+            new_vertex.qef = qef;
+            new_vertex.eis = Some(edges);
+            new_vertex.euler = euler - e / 4;
+            new_vertex.in_cell = self.child_index;
+            new_vertex.face_prop2 = face_prop2;
+            new_vertex.qef.solve(1e-6, 4, 1e-6);
+            new_vertex.error = new_vertex.qef.get_error();
+            let new_vertex_arc = Arc::new(Mutex::new(new_vertex));
+            for v_arc in &collected_vertices {
+                let mut v = v_arc.lock().unwrap();
+                if v.surface_index == i {
+                    if !Arc::ptr_eq(v_arc, &new_vertex_arc) {
+                        v.parent = Some(Arc::clone(&new_vertex_arc));
+                    } else {
+                        v.parent = None;
+                    }
+                }
+            }
+            new_vertices.push(new_vertex_arc);
         }
         for v_arc in &collected_vertices {
             let mut v = v_arc.lock().unwrap();
@@ -775,205 +777,203 @@ impl OctreeNode {
         }
         self.vertices = new_vertices;
     }
-
-    fn cluster_face(
-        nodes: &[Option<&OctreeNode>; 2],
-        direction: i32,
-        surface_index: &mut i32,
-        collected_vertices: &mut Vec<Arc<Mutex<Vertex>>>,
-    ) {
-        if nodes[0].is_none() || nodes[1].is_none() {
-            return;
-        }
-        let node0 = nodes[0].unwrap();
-        let node1 = nodes[1].unwrap();
-        if node0.node_type != NodeType::Leaf || node1.node_type != NodeType::Leaf {
-            for i in 0..4 {
-                let mut face_nodes = [None, None];
-                for j in 0..2 {
-                    if let Some(node) = nodes[j] {
-                        if node.node_type != NodeType::Internal {
-                            face_nodes[j] = Some(node);
-                        } else {
-                            let idx = T_FACE_PROC_FACE_MASK[direction as usize][i][j];
-                            face_nodes[j] =
-                                node.children[idx as usize].as_ref().map(|b| b.as_ref());
-                        }
-                    }
-                }
-                Self::cluster_face(
-                    &face_nodes,
-                    T_FACE_PROC_FACE_MASK[direction as usize][i][2] as i32,
-                    surface_index,
-                    collected_vertices,
-                );
-            }
-        }
-        let orders = [[0, 0, 1, 1], [0, 1, 0, 1]];
-        for i in 0..4 {
-            let mut edge_nodes = [None, None, None, None];
-            for j in 0..4 {
-                let order_idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][0];
-                let node_idx = orders[order_idx as usize][j];
-                if nodes[node_idx].is_none() {
-                    continue;
-                }
-                let node = nodes[node_idx].unwrap();
-                if node.node_type != NodeType::Internal {
-                    edge_nodes[j] = Some(node);
-                } else {
-                    let idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][1 + j];
-                    edge_nodes[j] = node.children[idx as usize].as_ref().map(|b| b.as_ref());
-                }
-            }
-            Self::cluster_edge(
-                &edge_nodes,
-                T_FACE_PROC_EDGE_MASK[direction as usize][i][5] as i32,
-                surface_index,
-                collected_vertices,
-            );
-        }
-    }
-
-    fn cluster_edge(
-        nodes: &[Option<&OctreeNode>; 4],
-        direction: i32,
-        surface_index: &mut i32,
-        collected_vertices: &mut Vec<Arc<Mutex<Vertex>>>,
-    ) {
-        if nodes[0].is_none() || nodes[1].is_none() || nodes[2].is_none() || nodes[3].is_none() {
-            return;
-        }
-        if nodes[0].unwrap().node_type == NodeType::Leaf
-            && nodes[1].unwrap().node_type == NodeType::Leaf
-            && nodes[2].unwrap().node_type == NodeType::Leaf
-            && nodes[3].unwrap().node_type == NodeType::Leaf
-        {
-            Self::cluster_indexes(nodes, direction, surface_index, collected_vertices);
-        } else {
-            for i in 0..2 {
-                let mut edge_nodes = [None, None, None, None];
-                for j in 0..4 {
-                    if let Some(node) = nodes[j] {
-                        if node.node_type == NodeType::Leaf {
-                            edge_nodes[j] = Some(node);
-                        } else {
-                            let idx = T_EDGE_PROC_EDGE_MASK[direction as usize][i][j];
-                            edge_nodes[j] =
-                                node.children[idx as usize].as_ref().map(|b| b.as_ref());
-                        }
-                    }
-                }
-                Self::cluster_edge(
-                    &edge_nodes,
-                    T_EDGE_PROC_EDGE_MASK[direction as usize][i][4] as i32,
-                    surface_index,
-                    collected_vertices,
-                );
-            }
-        }
-    }
-
-    fn cluster_indexes(
-        nodes: &[Option<&OctreeNode>; 4],
-        direction: i32,
-        max_surface_index: &mut i32,
-        collected_vertices: &mut Vec<Arc<Mutex<Vertex>>>,
-    ) {
-        if nodes.iter().all(|n| n.is_none()) {
-            return;
-        }
-        let mut vertices: [Option<Arc<Mutex<Vertex>>>; 4] = [None, None, None, None];
-        let mut v_count = 0;
-        for i in 0..4 {
-            if let Some(node) = nodes[i] {
-                let edge = T_PROCESS_EDGE_MASK[direction as usize][i];
-                let c1 = T_EDGE_PAIRS[edge as usize][0];
-                let c2 = T_EDGE_PAIRS[edge as usize][1];
-                let m1 = (node.corners >> c1) & 1;
-                let m2 = (node.corners >> c2) & 1;
-                let mut index = 0;
-                let mut skip = false;
-                for k in 0..16 {
-                    let e = TRANSFORMED_EDGES_TABLE[node.corners as usize][k];
-                    if e == -1 {
-                        index += 1;
-                        continue;
-                    }
-                    if e == -2 {
-                        if !((m1 == 0 && m2 != 0) || (m1 != 0 && m2 == 0)) {
-                            skip = true;
-                        }
-                        break;
-                    }
-                    if e == edge as i32 {
-                        break;
-                    }
-                }
-                if !skip && index < node.vertices.len() {
-                    let mut vertex_arc = Arc::clone(&node.vertices[index]);
-                    loop {
-                        let v = vertex_arc.lock().unwrap();
-                        match v.parent.as_ref() {
-                            Some(parent) => {
-                                let new_arc = Arc::clone(parent);
-                                drop(v);
-                                vertex_arc = new_arc;
-                            }
-                            None => break,
-                        }
-                    }
-                    vertices[i] = Some(vertex_arc);
-                    v_count += 1;
-                }
-            }
-        }
-        if v_count == 0 {
-            return;
-        }
-        let mut surface_index = -1i32;
-        for i in 0..4 {
-            if let Some(ref v_arc) = vertices[i] {
-                let (current_surface_index, needs_reassignment) = {
-                    let v = v_arc.lock().unwrap();
-                    let current = v.surface_index;
-                    let needs = current != -1 && surface_index != -1 && surface_index != current;
-                    (current, needs)
-                };
-                if needs_reassignment {
-                    Self::assign_surface(collected_vertices, current_surface_index, surface_index);
-                } else if current_surface_index != -1 && surface_index == -1 {
-                    surface_index = current_surface_index;
-                }
-            }
-        }
-        if surface_index == -1 {
-            surface_index = *max_surface_index;
-            *max_surface_index += 1;
-        }
-        for i in 0..4 {
-            if let Some(ref v_arc) = vertices[i] {
-                let mut v = v_arc.lock().unwrap();
-                if v.surface_index == -1 {
-                    collected_vertices.push(Arc::clone(v_arc));
-                }
-                v.surface_index = surface_index;
-            }
-        }
-    }
-
-    fn assign_surface(vertices: &mut Vec<Arc<Mutex<Vertex>>>, from: i32, to: i32) {
-        for v_arc in vertices {
-            let mut v = v_arc.lock().unwrap();
-            if v.surface_index == from {
-                v.surface_index = to;
-            }
-        }
-    }
 }
 
 impl Debug for OctreeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Index = {}, size = {}", self.index, self.size)
+    }
+}
+
+fn cluster_face(
+    nodes: &[Option<&OctreeNode>; 2],
+    direction: i32,
+    surface_index: &mut i32,
+    collected_vertices: &mut Vec<Arc<Mutex<Vertex>>>,
+) {
+    if nodes[0].is_none() || nodes[1].is_none() {
+        return;
+    }
+    let node0 = nodes[0].unwrap();
+    let node1 = nodes[1].unwrap();
+    if node0.node_type != NodeType::Leaf || node1.node_type != NodeType::Leaf {
+        for i in 0..4 {
+            let mut face_nodes = [None, None];
+            for j in 0..2 {
+                if let Some(node) = nodes[j] {
+                    if node.node_type != NodeType::Internal {
+                        face_nodes[j] = Some(node);
+                    } else {
+                        let idx = T_FACE_PROC_FACE_MASK[direction as usize][i][j];
+                        face_nodes[j] = node.children[idx as usize].as_ref().map(|b| b.as_ref());
+                    }
+                }
+            }
+            cluster_face(
+                &face_nodes,
+                T_FACE_PROC_FACE_MASK[direction as usize][i][2] as i32,
+                surface_index,
+                collected_vertices,
+            );
+        }
+    }
+    let orders = [[0, 0, 1, 1], [0, 1, 0, 1]];
+    for i in 0..4 {
+        let mut edge_nodes = [None, None, None, None];
+        for j in 0..4 {
+            let order_idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][0];
+            let node_idx = orders[order_idx as usize][j];
+            if nodes[node_idx].is_none() {
+                continue;
+            }
+            let node = nodes[node_idx].unwrap();
+            if node.node_type != NodeType::Internal {
+                edge_nodes[j] = Some(node);
+            } else {
+                let idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][1 + j];
+                edge_nodes[j] = node.children[idx as usize].as_ref().map(|b| b.as_ref());
+            }
+        }
+        cluster_edge(
+            &edge_nodes,
+            T_FACE_PROC_EDGE_MASK[direction as usize][i][5] as i32,
+            surface_index,
+            collected_vertices,
+        );
+    }
+}
+
+fn cluster_edge(
+    nodes: &[Option<&OctreeNode>; 4],
+    direction: i32,
+    surface_index: &mut i32,
+    collected_vertices: &mut Vec<Arc<Mutex<Vertex>>>,
+) {
+    if nodes[0].is_none() || nodes[1].is_none() || nodes[2].is_none() || nodes[3].is_none() {
+        return;
+    }
+    if nodes[0].unwrap().node_type == NodeType::Leaf
+        && nodes[1].unwrap().node_type == NodeType::Leaf
+        && nodes[2].unwrap().node_type == NodeType::Leaf
+        && nodes[3].unwrap().node_type == NodeType::Leaf
+    {
+        cluster_indexes(nodes, direction, surface_index, collected_vertices);
+    } else {
+        for i in 0..2 {
+            let mut edge_nodes = [None, None, None, None];
+            for j in 0..4 {
+                if let Some(node) = nodes[j] {
+                    if node.node_type == NodeType::Leaf {
+                        edge_nodes[j] = Some(node);
+                    } else {
+                        let idx = T_EDGE_PROC_EDGE_MASK[direction as usize][i][j];
+                        edge_nodes[j] = node.children[idx as usize].as_ref().map(|b| b.as_ref());
+                    }
+                }
+            }
+            cluster_edge(
+                &edge_nodes,
+                T_EDGE_PROC_EDGE_MASK[direction as usize][i][4] as i32,
+                surface_index,
+                collected_vertices,
+            );
+        }
+    }
+}
+
+fn cluster_indexes(
+    nodes: &[Option<&OctreeNode>; 4],
+    direction: i32,
+    max_surface_index: &mut i32,
+    collected_vertices: &mut Vec<Arc<Mutex<Vertex>>>,
+) {
+    if nodes.iter().all(|n| n.is_none()) {
+        return;
+    }
+    let mut vertices: [Option<Arc<Mutex<Vertex>>>; 4] = [None, None, None, None];
+    let mut v_count = 0;
+    for i in 0..4 {
+        if let Some(node) = nodes[i] {
+            let edge = T_PROCESS_EDGE_MASK[direction as usize][i];
+            let c1 = T_EDGE_PAIRS[edge as usize][0];
+            let c2 = T_EDGE_PAIRS[edge as usize][1];
+            let m1 = (node.corners >> c1) & 1;
+            let m2 = (node.corners >> c2) & 1;
+            let mut index = 0;
+            let mut skip = false;
+            for k in 0..16 {
+                let e = TRANSFORMED_EDGES_TABLE[node.corners as usize][k];
+                if e == -1 {
+                    index += 1;
+                    continue;
+                }
+                if e == -2 {
+                    if !((m1 == 0 && m2 != 0) || (m1 != 0 && m2 == 0)) {
+                        skip = true;
+                    }
+                    break;
+                }
+                if e == edge as i32 {
+                    break;
+                }
+            }
+            if !skip && index < node.vertices.len() {
+                let mut vertex_arc = Arc::clone(&node.vertices[index]);
+                loop {
+                    let v = vertex_arc.lock().unwrap();
+                    match v.parent.as_ref() {
+                        Some(parent) => {
+                            let new_arc = Arc::clone(parent);
+                            drop(v);
+                            vertex_arc = new_arc;
+                        }
+                        None => break,
+                    }
+                }
+                vertices[i] = Some(vertex_arc);
+                v_count += 1;
+            }
+        }
+    }
+    if v_count == 0 {
+        return;
+    }
+    let mut surface_index = -1;
+    for i in 0..4 {
+        if let Some(ref v_arc) = vertices[i] {
+            let (current_surface_index, needs_reassignment) = {
+                let v = v_arc.lock().unwrap();
+                let current = v.surface_index;
+                let needs = current != -1 && surface_index != -1 && surface_index != current;
+                (current, needs)
+            };
+            if needs_reassignment {
+                assign_surface(collected_vertices, current_surface_index, surface_index);
+            } else if current_surface_index != -1 && surface_index == -1 {
+                surface_index = current_surface_index;
+            }
+        }
+    }
+    if surface_index == -1 {
+        surface_index = *max_surface_index;
+        *max_surface_index += 1;
+    }
+    for i in 0..4 {
+        if let Some(ref v_arc) = vertices[i] {
+            let mut v = v_arc.lock().unwrap();
+            if v.surface_index == -1 {
+                collected_vertices.push(Arc::clone(v_arc));
+            }
+            v.surface_index = surface_index;
+        }
+    }
+}
+
+fn assign_surface(vertices: &mut Vec<Arc<Mutex<Vertex>>>, from: i32, to: i32) {
+    for v_arc in vertices {
+        let mut v = v_arc.lock().unwrap();
+        if v.surface_index == from {
+            v.surface_index = to;
+        }
     }
 }
