@@ -491,7 +491,6 @@ impl OctreeNode {
                     }
                     euler += v.euler;
                     qef.add_qef(&v.qef);
-                    qef.has_solution = false;
                     normal += v.normal;
                     count += 1;
                 }
