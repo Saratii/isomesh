@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct SMat3 {
     pub(crate) m00: f32,
     pub(crate) m01: f32,
@@ -38,5 +38,15 @@ impl SMat3 {
             self.m01 * v.x + self.m11 * v.y + self.m12 * v.z,
             self.m02 * v.x + self.m12 * v.y + self.m22 * v.z,
         )
+    }
+
+    #[inline]
+    pub(crate) fn add(&mut self, rhs: &SMat3) {
+        self.m00 += rhs.m00;
+        self.m01 += rhs.m01;
+        self.m02 += rhs.m02;
+        self.m11 += rhs.m11;
+        self.m12 += rhs.m12;
+        self.m22 += rhs.m22;
     }
 }
