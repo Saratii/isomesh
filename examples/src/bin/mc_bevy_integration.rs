@@ -11,7 +11,7 @@ use bevy::{
 };
 use isomesh::{
     manifold_dual_contouring::sampler::CuboidSampler,
-    marching_cubes::mc::{mc_mesh_generation, MeshBuffers, VoxelData},
+    marching_cubes::mc::{mc_mesh_generation, MeshBuffers},
 };
 use isomesh::{
     manifold_dual_contouring::sampler::SphereSampler,
@@ -43,7 +43,7 @@ fn setup_mdc(
     //create sphere
     let sphere_sampler = SphereSampler::new(Vec3::ZERO, 20.0);
     let mut mesh_buffers = MeshBuffers::new();
-    let sdfs = sphere_sampler.bake(
+    let densities = sphere_sampler.bake(
         Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
         Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
         (
@@ -52,13 +52,10 @@ fn setup_mdc(
             SDF_VALUES_PER_CHUNK_DIM,
         ),
     );
-    let voxel_data: Vec<VoxelData> = sdfs
-        .into_iter()
-        .map(|sdf| VoxelData { sdf, material: 1 })
-        .collect();
     mc_mesh_generation(
         &mut mesh_buffers,
-        &voxel_data,
+        &densities,
+        &[1; SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM],
         CUBES_PER_CHUNK_DIM,
         SDF_VALUES_PER_CHUNK_DIM,
     );
@@ -74,7 +71,7 @@ fn setup_mdc(
     //create cuboid
     let size = Vec3::new(10.0, 15.0, 20.0);
     let cuboid_sampler = CuboidSampler::new(Vec3::ZERO, size);
-    let sdfs = cuboid_sampler.bake(
+    let densities = cuboid_sampler.bake(
         Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
         Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
         (
@@ -84,13 +81,10 @@ fn setup_mdc(
         ),
     );
     let mut mesh_buffers = MeshBuffers::new();
-    let voxel_data: Vec<VoxelData> = sdfs
-        .into_iter()
-        .map(|sdf| VoxelData { sdf, material: 1 })
-        .collect();
     mc_mesh_generation(
         &mut mesh_buffers,
-        &voxel_data,
+        &densities,
+        &[1; SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM],
         CUBES_PER_CHUNK_DIM,
         SDF_VALUES_PER_CHUNK_DIM,
     );
