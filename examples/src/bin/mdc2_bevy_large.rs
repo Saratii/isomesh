@@ -81,8 +81,6 @@ pub fn generate_bevy_mesh(vertices: Vec<MeshVertex>, indices: Vec<i32>) -> Mesh 
         .iter()
         .map(|v| [v.color.x, v.color.y, v.color.z, 1.0])
         .collect();
-
-    // Decode indices - remove the flip bit marker (0x10000000)
     let indices_u32: Vec<u32> = indices
         .iter()
         .map(|i| {
@@ -90,11 +88,9 @@ pub fn generate_bevy_mesh(vertices: Vec<MeshVertex>, indices: Vec<i32>) -> Mesh 
             idx
         })
         .collect();
-
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_indices(Indices::U32(indices_u32));
-
     mesh
 }

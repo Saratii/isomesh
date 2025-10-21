@@ -20,7 +20,7 @@ impl SMat3 {
         m22: 0.0,
     };
 
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub(crate) fn fnorm(&self) -> f32 {
         (self.m00 * self.m00
@@ -30,7 +30,7 @@ impl SMat3 {
             .sqrt()
     }
 
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub(crate) fn vmul(&self, v: Vec3) -> Vec3 {
         Vec3::new(
@@ -40,7 +40,7 @@ impl SMat3 {
         )
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn add(&mut self, rhs: &SMat3) {
         self.m00 += rhs.m00;
         self.m01 += rhs.m01;

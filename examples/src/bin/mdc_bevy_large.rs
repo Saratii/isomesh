@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use bevy::{
     pbr::wireframe::{WireframeConfig, WireframePlugin},
     prelude::*,
@@ -68,8 +70,9 @@ fn setup_mdc(
     //camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(100.0, 100.0, 100.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_xyz(130.0, 80.0, 130.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     ));
+    exit(0);
 }
 
 pub fn generate_bevy_mesh(mesh_buffers: MeshBuffers) -> Mesh {
