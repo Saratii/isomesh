@@ -1,18 +1,15 @@
 use glam::Vec3;
-use once_cell::sync::Lazy;
 
-pub(crate) static T_CORNER_DELTAS: Lazy<[Vec3; 8]> = Lazy::new(|| {
-    [
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::new(0.0, 0.0, 1.0),
-        Vec3::new(0.0, 1.0, 0.0),
-        Vec3::new(0.0, 1.0, 1.0),
-        Vec3::new(1.0, 0.0, 0.0),
-        Vec3::new(1.0, 0.0, 1.0),
-        Vec3::new(1.0, 1.0, 0.0),
-        Vec3::new(1.0, 1.0, 1.0),
-    ]
-});
+pub(crate) static T_CORNER_DELTAS: [Vec3; 8] = [
+    Vec3::new(0.0, 0.0, 0.0),
+    Vec3::new(0.0, 0.0, 1.0),
+    Vec3::new(0.0, 1.0, 0.0),
+    Vec3::new(0.0, 1.0, 1.0),
+    Vec3::new(1.0, 0.0, 0.0),
+    Vec3::new(1.0, 0.0, 1.0),
+    Vec3::new(1.0, 1.0, 0.0),
+    Vec3::new(1.0, 1.0, 1.0),
+];
 
 pub(crate) const T_EDGE_PAIRS: [[i32; 3]; 12] = [
     [0, 4, 0],

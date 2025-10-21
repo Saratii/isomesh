@@ -38,7 +38,7 @@ pub enum NodeType {
 pub(crate) struct Vertex {
     pub(crate) parent: Option<Arc<Mutex<Vertex>>>,
     pub(crate) index: i32,
-    pub(crate) qef: Option<QEFSolver>,
+    pub(crate) qef: QEFSolver,
     pub(crate) normal: Vec3,
     pub(crate) surface_index: i32,
     pub(crate) error: f32,
@@ -70,7 +70,7 @@ impl Vertex {
         Vertex {
             parent: None,
             index: -1,
-            qef: None,
+            qef: QEFSolver::new(),
             normal: Vec3::ZERO,
             surface_index: -1,
             error: 0.0,
@@ -177,17 +177,14 @@ impl OctreeNode {
             let nc = vertex.normal * 0.5 + Vec3::ONE * 0.5;
             let nc_normalized = nc.normalize();
             let color = [nc_normalized.x, nc_normalized.y, nc_normalized.z, 1.0];
-
-            if let Some(ref mut qef) = vertex.qef {
-                let position = qef.solve(1e-6, 4, 1e-6);
-                mesh_buffers
-                    .positions
-                    .push([position.x, position.y, position.z]);
-                mesh_buffers
-                    .normals
-                    .push([vertex.normal.x, vertex.normal.y, vertex.normal.z]);
-                mesh_buffers.colors.push(color);
-            }
+            let position = vertex.qef.solve(1e-6, 4, 1e-6);
+            mesh_buffers
+                .positions
+                .push([position.x, position.y, position.z]);
+            mesh_buffers
+                .normals
+                .push([vertex.normal.x, vertex.normal.y, vertex.normal.z]);
+            mesh_buffers.colors.push(color);
         }
     }
 
@@ -302,7 +299,6 @@ impl OctreeNode {
         for i in 0..v_index {
             let mut k = 0;
             let mut vertex = Vertex::new();
-            vertex.qef = Some(QEFSolver::new());
             let mut normal = Vec3::ZERO;
             let mut ei = [0i32; 12];
             while v_edges[i][k] != -1 {
@@ -320,9 +316,7 @@ impl OctreeNode {
                 );
                 let n = get_normal(intersection, sampler);
                 normal += n;
-                if let Some(ref mut qef) = vertex.qef {
-                    qef.add(intersection, n);
-                }
+                vertex.qef.add(intersection, n);
                 k += 1;
             }
             normal /= k as f32;
@@ -334,10 +328,8 @@ impl OctreeNode {
             vertex.eis = Some(ei);
             vertex.in_cell = self.child_index;
             vertex.face_prop2 = true;
-            if let Some(ref mut qef) = vertex.qef {
-                qef.solve(1e-6, 4, 1e-6);
-                vertex.error = qef.get_error();
-            }
+            vertex.qef.solve(1e-6, 4, 1e-6);
+            vertex.error = vertex.qef.get_error();
             self.vertices.push(Arc::new(Mutex::new(vertex)));
         }
         true
@@ -730,9 +722,8 @@ impl OctreeNode {
                             }
                         }
                         euler += v.euler;
-                        if let Some(ref v_qef) = v.qef {
-                            qef.add_data(&v_qef.data);
-                        }
+                        qef.data.add(&v.qef.data);
+                        qef.has_solution = false;
                         normal += v.normal;
                         count += 1;
                     }
@@ -755,15 +746,13 @@ impl OctreeNode {
                 normal /= count as f32;
                 normal = normal.normalize();
                 new_vertex.normal = normal;
-                new_vertex.qef = Some(qef);
+                new_vertex.qef = qef;
                 new_vertex.eis = Some(edges);
                 new_vertex.euler = euler - e / 4;
                 new_vertex.in_cell = self.child_index;
                 new_vertex.face_prop2 = face_prop2;
-                if let Some(ref mut qef) = new_vertex.qef {
-                    qef.solve(1e-6, 4, 1e-6);
-                    new_vertex.error = qef.get_error();
-                }
+                new_vertex.qef.solve(1e-6, 4, 1e-6);
+                new_vertex.error = new_vertex.qef.get_error();
                 let new_vertex_arc = Arc::new(Mutex::new(new_vertex));
                 for v_arc in &collected_vertices {
                     let mut v = v_arc.lock().unwrap();

@@ -1,60 +1,58 @@
+use std::f32::consts::SQRT_2;
+
 use glam::Vec3;
 
 use crate::mdc::{mat3::Mat3, smat3::SMat3};
 
-pub fn rotate01(vtav: &mut SMat3, v: &mut Mat3) {
+pub fn rotate01(vtav: &mut SMat3) {
     if vtav.m01 == 0.0 {
         return;
     }
-    let mut c = 0.0;
-    let mut s = 0.0;
-    vtav.rot01(&mut c, &mut s);
-    c = 0.0;
-    s = 0.0;
-    v.rot01_post(c, s);
+    vtav.rot01();
 }
 
-pub fn rotate02(vtav: &mut SMat3, v: &mut Mat3) {
+pub fn rotate02(vtav: &mut SMat3) {
     if vtav.m02 == 0.0 {
         return;
     }
-    let mut c = 0.0;
-    let mut s = 0.0;
-    vtav.rot02(&mut c, &mut s);
-    c = 0.0;
-    s = 0.0;
-    v.rot02_post(c, s);
+    vtav.rot02();
 }
 
-pub fn rotate12(vtav: &mut SMat3, v: &mut Mat3) {
+pub fn rotate12(vtav: &mut SMat3) {
     if vtav.m12 == 0.0 {
         return;
     }
-    let mut c = 0.0;
-    let mut s = 0.0;
-    vtav.rot12(&mut c, &mut s);
-    c = 0.0;
-    s = 0.0;
-    v.rot12_post(c, s);
+    vtav.rot12();
 }
 
-pub fn get_symmetric_svd(a: &SMat3, vtav: &mut SMat3, v: &mut Mat3, tol: f32, max_sweeps: i32) {
-    vtav.set_symmetric_from(a);
-    v.set(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+pub fn get_symmetric_svd(a: &SMat3, tol: f32, max_sweeps: i32) -> (SMat3, Mat3) {
+    let mut vtav = *a;
+    let mut v = Mat3::IDENTITY;
     let delta = tol * vtav.fnorm();
     for _ in 0..max_sweeps {
-        if vtav.off() <= delta {
+        if (vtav.m01 * vtav.m01 + vtav.m02 * vtav.m02 + vtav.m12 * vtav.m12).sqrt() * SQRT_2
+            <= delta
+        {
             break;
         }
-        rotate01(vtav, v);
-        rotate02(vtav, v);
-        rotate12(vtav, v);
+        rotate01(&mut vtav);
+        v.m00 = 0.0;
+        v.m11 = 0.0;
+        rotate02(&mut vtav);
+        v.m22 = 0.0;
+        rotate12(&mut vtav);
     }
+    (vtav, v)
 }
 
 pub fn calc_error_smat(orig_a: &SMat3, x: Vec3, b: Vec3) -> f32 {
-    let mut a = Mat3::new();
-    a.set_symmetric(orig_a);
+    let mut a = Mat3::ZERO;
+    a.m00 = orig_a.m00;
+    a.m01 = orig_a.m01;
+    a.m02 = orig_a.m02;
+    a.m11 = orig_a.m11;
+    a.m12 = orig_a.m12;
+    a.m22 = orig_a.m22;
     let vtmp = a.vmul(x);
     let vtmp = b - vtmp;
     vtmp.x * vtmp.x + vtmp.y * vtmp.y + vtmp.z * vtmp.z
@@ -68,22 +66,14 @@ pub(crate) fn pinv(x: f32, tol: f32) -> f32 {
     }
 }
 
-pub(crate) fn pseudo_inverse(d: &SMat3, v: &Mat3, tol: f32) -> Mat3 {
-    let mut m = Mat3::new();
+pub(crate) fn pseudo_inverse(d: &SMat3, tol: f32) -> Mat3 {
+    let mut m = Mat3::ZERO;
     let d0 = pinv(d.m00, tol);
     let d1 = pinv(d.m11, tol);
     let d2 = pinv(d.m22, tol);
-    m.set(
-        v.m00 * d0 * v.m00 + v.m01 * d1 * v.m01 + v.m02 * d2 * v.m02,
-        v.m00 * d0 * v.m10 + v.m01 * d1 * v.m11 + v.m02 * d2 * v.m12,
-        v.m00 * d0 * v.m20 + v.m01 * d1 * v.m21 + v.m02 * d2 * v.m22,
-        v.m10 * d0 * v.m00 + v.m11 * d1 * v.m01 + v.m12 * d2 * v.m02,
-        v.m10 * d0 * v.m10 + v.m11 * d1 * v.m11 + v.m12 * d2 * v.m12,
-        v.m10 * d0 * v.m20 + v.m11 * d1 * v.m21 + v.m12 * d2 * v.m22,
-        v.m20 * d0 * v.m00 + v.m21 * d1 * v.m01 + v.m22 * d2 * v.m02,
-        v.m20 * d0 * v.m10 + v.m21 * d1 * v.m11 + v.m22 * d2 * v.m12,
-        v.m20 * d0 * v.m20 + v.m21 * d1 * v.m21 + v.m22 * d2 * v.m22,
-    );
+    m.m00 = d0;
+    m.m11 = d1;
+    m.m22 = d2;
     m
 }
 
@@ -95,10 +85,12 @@ pub(crate) fn solve_symmetric(
     svd_sweeps: i32,
     pinv_tol: f32,
 ) -> f32 {
-    let mut vtav = SMat3::new();
-    let mut v = Mat3::new();
-    get_symmetric_svd(a, &mut vtav, &mut v, svd_tol, svd_sweeps);
-    let pinv = pseudo_inverse(&vtav, &v, pinv_tol);
+    let (vtav, v) = get_symmetric_svd(a, svd_tol, svd_sweeps);
+    let pinv = if v.m00 != 0.0 {
+        pseudo_inverse(&vtav, pinv_tol)
+    } else {
+        Mat3::ZERO
+    };
     *x = pinv.vmul(*b);
     calc_error_smat(a, *x, *b)
 }

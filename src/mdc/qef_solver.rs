@@ -82,7 +82,7 @@ impl QEFSolver {
     pub(crate) fn new() -> Self {
         Self {
             data: QEFData::new(),
-            ata: SMat3::new(),
+            ata: SMat3::ZERO,
             atb: Vec3::ZERO,
             x: Vec3::ZERO,
             mass_point: Vec3::ZERO,
@@ -111,30 +111,22 @@ impl QEFSolver {
         self.data.num_points += 1;
     }
 
-    pub(crate) fn add_data(&mut self, rhs: &QEFData) {
-        self.has_solution = false;
-        self.data.add(rhs);
-    }
-
     pub(crate) fn get_error(&mut self) -> f32 {
-        self.get_error_at(self.x)
-    }
-
-    pub(crate) fn get_error_at(&mut self, pos: Vec3) -> f32 {
+        let pos = self.x;
         if !self.has_solution {
-            self.set_ata();
-            self.set_atb();
+            self.ata.m00 = self.data.ata_00;
+            self.ata.m01 = self.data.ata_01;
+            self.ata.m02 = self.data.ata_02;
+            self.ata.m11 = self.data.ata_11;
+            self.ata.m12 = self.data.ata_12;
+            self.ata.m22 = self.data.ata_22;
+            self.atb = Vec3::new(self.data.atb_x, self.data.atb_y, self.data.atb_z);
         }
         let atax = self.ata.vmul(pos);
         self.last_error = pos.dot(atax) - 2.0 * pos.dot(self.atb) + self.data.btb;
         if self.last_error.is_nan() {
             self.last_error = 10000.0;
         }
-        // debug_assert!(
-        //     self.last_error >= -1e-2,
-        //     "QEF error is negative ({}) — possible instability.",
-        //     self.last_error
-        // );
         self.last_error
     }
 
@@ -148,8 +140,13 @@ impl QEFSolver {
             self.data.mass_point_z,
         );
         self.mass_point /= self.data.num_points as f32;
-        self.set_ata();
-        self.set_atb();
+        self.ata.m00 = self.data.ata_00;
+        self.ata.m01 = self.data.ata_01;
+        self.ata.m02 = self.data.ata_02;
+        self.ata.m11 = self.data.ata_11;
+        self.ata.m12 = self.data.ata_12;
+        self.ata.m22 = self.data.ata_22;
+        self.atb = Vec3::new(self.data.atb_x, self.data.atb_y, self.data.atb_z);
         let tmpv = self.ata.vmul(self.mass_point);
         self.atb = self.atb - tmpv;
         self.x = Vec3::ZERO;
@@ -168,24 +165,9 @@ impl QEFSolver {
         }
         self.last_error = result;
         debug_assert!(result >= 0.0);
-        self.set_atb();
+        self.atb = Vec3::new(self.data.atb_x, self.data.atb_y, self.data.atb_z);
         self.has_solution = true;
         self.x
-    }
-
-    fn set_ata(&mut self) {
-        self.ata.set_symmetric(
-            self.data.ata_00,
-            self.data.ata_01,
-            self.data.ata_02,
-            self.data.ata_11,
-            self.data.ata_12,
-            self.data.ata_22,
-        );
-    }
-
-    fn set_atb(&mut self) {
-        self.atb = Vec3::new(self.data.atb_x, self.data.atb_y, self.data.atb_z);
     }
 }
 
