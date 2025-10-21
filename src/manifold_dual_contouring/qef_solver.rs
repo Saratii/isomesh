@@ -2,7 +2,7 @@
 
 use glam::Vec3;
 
-use crate::mdc::{smat3::SMat3, svd::solve_symmetric};
+use crate::manifold_dual_contouring::{smat3::SMat3, svd::solve_symmetric};
 
 #[derive(Clone)]
 pub(crate) struct QEFSolver {

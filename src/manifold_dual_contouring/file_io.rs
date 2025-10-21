@@ -1,4 +1,4 @@
-use crate::mdc::mdc::MeshBuffers;
+use crate::manifold_dual_contouring::mdc::MeshBuffers;
 use std::fs::File;
 use std::io::Write;
 

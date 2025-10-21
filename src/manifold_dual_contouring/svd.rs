@@ -6,7 +6,7 @@ use std::f32::consts::SQRT_2;
 
 use glam::Vec3;
 
-use crate::mdc::{
+use crate::manifold_dual_contouring::{
     mat3::{Mat3, calc_symmetric_givens_coefficients},
     smat3::SMat3,
 };

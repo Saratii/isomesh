@@ -102,6 +102,27 @@ impl SphereSampler {
     pub fn new(center: Vec3, radius: f32) -> Self {
         Self { center, radius }
     }
+
+    pub fn bake(&self, min: Vec3, max: Vec3, resolution: (usize, usize, usize)) -> Vec<f32> {
+        let (res_x, res_y, res_z) = resolution;
+        let mut baked = Vec::with_capacity(res_x * res_y * res_z);
+        let step_x = (max.x - min.x) / (res_x - 1).max(1) as f32;
+        let step_y = (max.y - min.y) / (res_y - 1).max(1) as f32;
+        let step_z = (max.z - min.z) / (res_z - 1).max(1) as f32;
+        for z in 0..res_z {
+            for y in 0..res_y {
+                for x in 0..res_x {
+                    let point = Vec3::new(
+                        min.x + x as f32 * step_x,
+                        min.y + y as f32 * step_y,
+                        min.z + z as f32 * step_z,
+                    );
+                    baked.push(self.sample(point));
+                }
+            }
+        }
+        baked
+    }
 }
 
 impl Sampler for SphereSampler {
@@ -120,6 +141,27 @@ pub struct CuboidSampler {
 impl CuboidSampler {
     pub fn new(center: Vec3, size: Vec3) -> Self {
         Self { center, size }
+    }
+
+    pub fn bake(&self, min: Vec3, max: Vec3, resolution: (usize, usize, usize)) -> Vec<f32> {
+        let (res_x, res_y, res_z) = resolution;
+        let mut baked = Vec::with_capacity(res_x * res_y * res_z);
+        let step_x = (max.x - min.x) / (res_x - 1).max(1) as f32;
+        let step_y = (max.y - min.y) / (res_y - 1).max(1) as f32;
+        let step_z = (max.z - min.z) / (res_z - 1).max(1) as f32;
+        for z in 0..res_z {
+            for y in 0..res_y {
+                for x in 0..res_x {
+                    let point = Vec3::new(
+                        min.x + x as f32 * step_x,
+                        min.y + y as f32 * step_y,
+                        min.z + z as f32 * step_z,
+                    );
+                    baked.push(self.sample(point));
+                }
+            }
+        }
+        baked
     }
 }
 

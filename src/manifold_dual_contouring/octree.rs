@@ -9,23 +9,23 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::mdc::mdc::MeshBuffers;
-use crate::mdc::qef_solver::QEFSolver;
-use crate::mdc::sampler::Sampler;
-use crate::mdc::sampler::get_intersection;
-use crate::mdc::sampler::get_normal;
-use crate::mdc::tables::T_CELL_PROC_EDGE_MASK;
-use crate::mdc::tables::T_CORNER_DELTAS;
-use crate::mdc::tables::T_EDGE_PAIRS;
-use crate::mdc::tables::T_EDGE_PROC_EDGE_MASK;
-use crate::mdc::tables::T_EXTERNAL_EDGES;
-use crate::mdc::tables::T_FACE_PROC_EDGE_MASK;
-use crate::mdc::tables::T_FACE_PROC_FACE_MASK;
-use crate::mdc::tables::T_FACES;
-use crate::mdc::tables::T_INTERNAL_EDGES;
-use crate::mdc::tables::T_PROCESS_EDGE_MASK;
-use crate::mdc::tables::TRANSFORMED_EDGES_TABLE;
-use crate::mdc::tables::TRANSFORMED_VERTICES_NUMBER_TABLE;
+use crate::manifold_dual_contouring::mdc::MeshBuffers;
+use crate::manifold_dual_contouring::qef_solver::QEFSolver;
+use crate::manifold_dual_contouring::sampler::Sampler;
+use crate::manifold_dual_contouring::sampler::get_intersection;
+use crate::manifold_dual_contouring::sampler::get_normal;
+use crate::manifold_dual_contouring::tables::T_CELL_PROC_EDGE_MASK;
+use crate::manifold_dual_contouring::tables::T_CORNER_DELTAS;
+use crate::manifold_dual_contouring::tables::T_EDGE_PAIRS;
+use crate::manifold_dual_contouring::tables::T_EDGE_PROC_EDGE_MASK;
+use crate::manifold_dual_contouring::tables::T_EXTERNAL_EDGES;
+use crate::manifold_dual_contouring::tables::T_FACE_PROC_EDGE_MASK;
+use crate::manifold_dual_contouring::tables::T_FACE_PROC_FACE_MASK;
+use crate::manifold_dual_contouring::tables::T_FACES;
+use crate::manifold_dual_contouring::tables::T_INTERNAL_EDGES;
+use crate::manifold_dual_contouring::tables::T_PROCESS_EDGE_MASK;
+use crate::manifold_dual_contouring::tables::TRANSFORMED_EDGES_TABLE;
+use crate::manifold_dual_contouring::tables::TRANSFORMED_VERTICES_NUMBER_TABLE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {

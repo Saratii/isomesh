@@ -1,7 +1,7 @@
 use glam::{Vec3, Vec4};
 use std::cell::Cell;
 
-use crate::mdc2::solver::LevenQefSolver;
+use crate::manifold_dual_contouring_2::solver::LevenQefSolver;
 
 #[derive(Clone)]
 pub(crate) struct QefData {

@@ -5,7 +5,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 use glam::Vec3;
 
-use crate::mdc::{
+use crate::manifold_dual_contouring::{
     octree::{ENFORCE_MANIFOLD, OctreeNode},
     sampler::Sampler,
 };
@@ -35,16 +35,14 @@ impl Default for MeshBuffers {
     }
 }
 
-pub fn mdc_mesh_generation<S>(
+pub fn mdc_mesh_generation<S: Sampler + Send + Sync + 'static>(
     threshold: f32,
     mesh_buffers: &mut MeshBuffers,
     flat_shading: bool,
     resolution: i32,
     enforce_manifold: bool,
     sampler: S,
-) where
-    S: Sampler + Send + Sync + 'static,
-{
+) {
     ENFORCE_MANIFOLD.store(enforce_manifold, Ordering::Relaxed);
     let mut tree = Box::new(OctreeNode::new());
     tree.construct_base(resolution, mesh_buffers, Arc::new(sampler));
@@ -165,7 +163,7 @@ fn get_normal_q(indexes: &[usize], vertices_buffer: &[[f32; 3]]) -> Vec3 {
 mod tests {
     use glam::Vec3;
 
-    use crate::mdc::{
+    use crate::manifold_dual_contouring::{
         mdc::{MeshBuffers, mdc_mesh_generation},
         sampler::SphereSampler,
         test_data::{EXPECTED_COLORS, EXPECTED_INDICES, EXPECTED_NORMALS, EXPECTED_POSITIONS},

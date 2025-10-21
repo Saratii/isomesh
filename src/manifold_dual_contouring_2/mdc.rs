@@ -1,5 +1,7 @@
+//This is a work in progress. It more closely resembles MDC from the original paper but is slow and doesn't produce correct vertices.
+
 use crate::{
-    mdc::{
+    manifold_dual_contouring::{
         sampler::Sampler,
         tables::{
             T_CELL_PROC_EDGE_MASK, T_CORNER_DELTAS, T_EDGE_PAIRS, T_EDGE_PROC_EDGE_MASK,
@@ -7,7 +9,7 @@ use crate::{
             T_INTERNAL_EDGES, T_PROCESS_EDGE_MASK, TRANSFORMED_EDGES_TABLE,
         },
     },
-    mdc2::{
+    manifold_dual_contouring_2::{
         octree::{MeshVertex, OctreeNodeType},
         qef::QefData,
         solver::LevenQefSolver,

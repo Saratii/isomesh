@@ -1,7 +1,7 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use glam::Vec3;
-use isomesh::mdc::mdc::{MeshBuffers, mdc_mesh_generation};
-use isomesh::mdc::sampler::{CuboidSampler, SphereSampler};
+use isomesh::manifold_dual_contouring::mdc::{MeshBuffers, mdc_mesh_generation};
+use isomesh::manifold_dual_contouring::sampler::{CuboidSampler, SphereSampler};
 
 fn bench_single_sphere_small(c: &mut Criterion) {
     c.bench_function("single_sphere_small", |b| {
