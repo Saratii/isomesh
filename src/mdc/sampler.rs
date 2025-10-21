@@ -70,17 +70,15 @@ pub fn blend(a: f32, b: f32, k: f32) -> f32 {
     ((a_k * b_k) / (a_k + b_k)).powf(1.0 / k)
 }
 
-pub(crate) fn get_normal<S>(v: Vec3, sampler: &Arc<S>) -> Vec3
-where
-    S: Sampler,
-{
+pub(crate) fn get_normal<S: Sampler>(v: Vec3, sampler: &S) -> Vec3 {
     let h = 0.001;
-    let dxp = sampler.sample(Vec3::new(v.x + h, v.y, v.z));
-    let dxm = sampler.sample(Vec3::new(v.x - h, v.y, v.z));
-    let dyp = sampler.sample(Vec3::new(v.x, v.y + h, v.z));
-    let dym = sampler.sample(Vec3::new(v.x, v.y - h, v.z));
-    let dzp = sampler.sample(Vec3::new(v.x, v.y, v.z + h));
-    let dzm = sampler.sample(Vec3::new(v.x, v.y, v.z - h));
+    let (x, y, z) = (v.x, v.y, v.z);
+    let dxp = sampler.sample(Vec3::new(x + h, y, z));
+    let dxm = sampler.sample(Vec3::new(x - h, y, z));
+    let dyp = sampler.sample(Vec3::new(x, y + h, z));
+    let dym = sampler.sample(Vec3::new(x, y - h, z));
+    let dzp = sampler.sample(Vec3::new(x, y, z + h));
+    let dzm = sampler.sample(Vec3::new(x, y, z - h));
     let grad = Vec3::new(dxp - dxm, dyp - dym, dzp - dzm);
     grad.normalize()
 }
@@ -124,8 +122,16 @@ impl CuboidSampler {
 }
 
 impl Sampler for CuboidSampler {
+    #[inline]
     fn sample(&self, point: Vec3) -> f32 {
         let p = (point - self.center).abs() - self.size;
         p.max(Vec3::ZERO).length() + p.max_element().min(0.0)
+    }
+}
+
+impl<S: Sampler> Sampler for Arc<S> {
+    #[inline]
+    fn sample(&self, point: Vec3) -> f32 {
+        (**self).sample(point)
     }
 }

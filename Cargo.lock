@@ -2558,6 +2558,7 @@ dependencies = [
  "criterion",
  "glam",
  "noise",
+ "parking_lot",
  "rayon",
 ]
 

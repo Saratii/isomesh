@@ -1,14 +1,13 @@
 // https://github.com/Lin20/isosurface/tree/master/Isosurface/Isosurface/ManifoldDC
 
 use glam::Vec3;
+use parking_lot::Mutex;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 
 use crate::mdc::mdc::MeshBuffers;
 use crate::mdc::qef_solver::QEFSolver;
@@ -104,7 +103,7 @@ pub(crate) struct OctreeNode {
     pub(crate) child_index: i32,
 }
 
-static ENFORCE_MANIFOLD: AtomicBool = AtomicBool::new(false);
+pub static ENFORCE_MANIFOLD: AtomicBool = AtomicBool::new(false);
 
 impl OctreeNode {
     pub(crate) fn new() -> Self {
@@ -133,22 +132,12 @@ impl OctreeNode {
         }
     }
 
-    pub(crate) fn set_enforce_manifold(enforce: bool) {
-        ENFORCE_MANIFOLD.store(enforce, Ordering::Relaxed);
-    }
-
-    pub(crate) fn get_enforce_manifold() -> bool {
-        ENFORCE_MANIFOLD.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn construct_base<S>(
+    pub(crate) fn construct_base<S: Sampler + Send + Sync + 'static>(
         &mut self,
         size: i32,
         mesh_buffers: &mut MeshBuffers,
         sampler: Arc<S>,
-    ) where
-        S: Sampler + Send + Sync + 'static,
-    {
+    ) {
         self.index = 0;
         self.position = Vec3::splat(-(size as f32) * 0.5);
         self.size = size;
@@ -172,7 +161,7 @@ impl OctreeNode {
             return;
         }
         for i in 0..self.vertices.len() {
-            let mut vertex_lock = self.vertices[i].lock().unwrap();
+            let mut vertex_lock = self.vertices[i].lock();
             vertex_lock.index = mesh_buffers.positions.len() as i32;
             let position = vertex_lock.qef.solve(1e-6, 4, 1e-6);
             let nc = vertex_lock.normal * 0.5 + Vec3::ONE * 0.5;
@@ -192,16 +181,13 @@ impl OctreeNode {
         }
     }
 
-    fn construct_nodes<S>(
+    fn construct_nodes<S: Sampler + Send + Sync + 'static>(
         &mut self,
         mesh_buffers: &mut MeshBuffers,
         n_index: &mut i32,
         threaded: i32,
         sampler: &Arc<S>,
-    ) -> bool
-    where
-        S: Sampler + Send + Sync + 'static,
-    {
+    ) -> bool {
         if self.size == 1 {
             return self.construct_leaf(n_index, sampler);
         }
@@ -259,18 +245,15 @@ impl OctreeNode {
         has_children
     }
 
-    fn construct_leaf<S>(&mut self, index: &mut i32, sampler: &Arc<S>) -> bool
-    where
-        S: Sampler,
-    {
+    fn construct_leaf<S: Sampler>(&mut self, index: &mut i32, sampler: &Arc<S>) -> bool {
         if self.size != 1 {
             return false;
         }
         self.index = *index;
         *index += 1;
         self.node_type = NodeType::Leaf;
-        let mut corners = 0u8;
-        let mut samples = [0.0f32; 8];
+        let mut corners = 0;
+        let mut samples = [0.0; 8];
         for i in 0..8 {
             samples[i] = sampler.sample(self.position + T_CORNER_DELTAS[i]);
             if samples[i] < 0.0 {
@@ -344,11 +327,12 @@ impl OctreeNode {
         indexes: &mut Vec<u32>,
         tri_count: &mut Vec<i32>,
         threshold: f32,
+        enforce_manifold: bool,
     ) {
         if self.node_type == NodeType::Internal {
             for i in 0..8 {
                 if let Some(ref child) = self.children[i] {
-                    child.process_cell(indexes, tri_count, threshold);
+                    child.process_cell(indexes, tri_count, threshold, enforce_manifold);
                 }
             }
             for i in 0..12 {
@@ -357,12 +341,13 @@ impl OctreeNode {
                 let c2 = T_EDGE_PAIRS[i][1];
                 face_nodes[0] = self.children[c1 as usize].as_ref().map(|b| b.as_ref());
                 face_nodes[1] = self.children[c2 as usize].as_ref().map(|b| b.as_ref());
-                Self::process_face(
+                process_face(
                     &face_nodes,
                     T_EDGE_PAIRS[i][2] as i32,
                     indexes,
                     tri_count,
                     threshold,
+                    enforce_manifold,
                 );
             }
             for i in 0..6 {
@@ -380,236 +365,14 @@ impl OctreeNode {
                         .as_ref()
                         .map(|b| b.as_ref()),
                 ];
-                Self::process_edge(
+                process_edge(
                     &edge_nodes,
                     T_CELL_PROC_EDGE_MASK[i][4] as i32,
                     indexes,
                     tri_count,
                     threshold,
+                    enforce_manifold,
                 );
-            }
-        }
-    }
-
-    fn process_face(
-        nodes: &[Option<&OctreeNode>; 2],
-        direction: i32,
-        indexes: &mut Vec<u32>,
-        tri_count: &mut Vec<i32>,
-        threshold: f32,
-    ) {
-        if nodes[0].is_none() || nodes[1].is_none() {
-            return;
-        }
-        let node0 = nodes[0].unwrap();
-        let node1 = nodes[1].unwrap();
-        if node0.node_type != NodeType::Leaf || node1.node_type != NodeType::Leaf {
-            for i in 0..4 {
-                let mut face_nodes = [None, None];
-                for j in 0..2 {
-                    if let Some(node) = nodes[j] {
-                        if node.node_type == NodeType::Leaf {
-                            face_nodes[j] = Some(node);
-                        } else {
-                            let idx = T_FACE_PROC_FACE_MASK[direction as usize][i][j];
-                            face_nodes[j] =
-                                node.children[idx as usize].as_ref().map(|b| b.as_ref());
-                        }
-                    }
-                }
-                Self::process_face(
-                    &face_nodes,
-                    T_FACE_PROC_FACE_MASK[direction as usize][i][2] as i32,
-                    indexes,
-                    tri_count,
-                    threshold,
-                );
-            }
-            let orders = [[0, 0, 1, 1], [0, 1, 0, 1]];
-            for i in 0..4 {
-                let mut edge_nodes = [None, None, None, None];
-                for j in 0..4 {
-                    let order_idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][0];
-                    if let Some(node) = nodes[orders[order_idx as usize][j]] {
-                        if node.node_type == NodeType::Leaf {
-                            edge_nodes[j] = Some(node);
-                        } else {
-                            let idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][1 + j];
-                            edge_nodes[j] =
-                                node.children[idx as usize].as_ref().map(|b| b.as_ref());
-                        }
-                    }
-                }
-                Self::process_edge(
-                    &edge_nodes,
-                    T_FACE_PROC_EDGE_MASK[direction as usize][i][5] as i32,
-                    indexes,
-                    tri_count,
-                    threshold,
-                );
-            }
-        }
-    }
-
-    fn process_edge(
-        nodes: &[Option<&OctreeNode>; 4],
-        direction: i32,
-        indexes: &mut Vec<u32>,
-        tri_count: &mut Vec<i32>,
-        threshold: f32,
-    ) {
-        if nodes[0].is_none() || nodes[1].is_none() || nodes[2].is_none() || nodes[3].is_none() {
-            return;
-        }
-        if nodes[0].unwrap().node_type == NodeType::Leaf
-            && nodes[1].unwrap().node_type == NodeType::Leaf
-            && nodes[2].unwrap().node_type == NodeType::Leaf
-            && nodes[3].unwrap().node_type == NodeType::Leaf
-        {
-            Self::process_indexes(nodes, direction, indexes, tri_count, threshold);
-        } else {
-            for i in 0..2 {
-                let mut edge_nodes = [None, None, None, None];
-                for j in 0..4 {
-                    if let Some(node) = nodes[j] {
-                        if node.node_type == NodeType::Leaf {
-                            edge_nodes[j] = Some(node);
-                        } else {
-                            let idx = T_EDGE_PROC_EDGE_MASK[direction as usize][i][j];
-                            edge_nodes[j] =
-                                node.children[idx as usize].as_ref().map(|b| b.as_ref());
-                        }
-                    }
-                }
-                Self::process_edge(
-                    &edge_nodes,
-                    T_EDGE_PROC_EDGE_MASK[direction as usize][i][4] as i32,
-                    indexes,
-                    tri_count,
-                    threshold,
-                );
-            }
-        }
-    }
-
-    fn process_indexes(
-        nodes: &[Option<&OctreeNode>; 4],
-        direction: i32,
-        indexes: &mut Vec<u32>,
-        tri_count: &mut Vec<i32>,
-        threshold: f32,
-    ) {
-        let mut min_size = 10000000;
-        let mut indices = [-1i32; 4];
-        let mut flip = false;
-        let mut sign_changed = false;
-        for i in 0..4 {
-            if let Some(node) = nodes[i] {
-                let edge = T_PROCESS_EDGE_MASK[direction as usize][i];
-                let c1 = T_EDGE_PAIRS[edge as usize][0];
-                let c2 = T_EDGE_PAIRS[edge as usize][1];
-                let m1 = (node.corners >> c1) & 1;
-                let m2 = (node.corners >> c2) & 1;
-                if node.size < min_size {
-                    min_size = node.size;
-                    flip = m1 == 1;
-                    sign_changed = (m1 == 0 && m2 != 0) || (m1 != 0 && m2 == 0);
-                }
-                let mut index = 0;
-                let mut skip = false;
-                for k in 0..16 {
-                    let e = TRANSFORMED_EDGES_TABLE[node.corners as usize][k];
-                    if e == -1 {
-                        index += 1;
-                        continue;
-                    }
-                    if e == -2 {
-                        skip = true;
-                        break;
-                    }
-                    if e == edge as i32 {
-                        break;
-                    }
-                }
-                if skip {
-                    continue;
-                }
-                if index >= node.vertices.len() {
-                    return;
-                }
-                let v = node.vertices[index].lock().unwrap();
-                let mut highest_index = v.index;
-                let mut highest_parent = v.parent.clone();
-                loop {
-                    if let Some(parent_arc) = highest_parent.take() {
-                        let parent = parent_arc.lock().unwrap();
-                        if parent.error <= threshold
-                            && (!Self::get_enforce_manifold()
-                                || (parent.euler == 1 && parent.face_prop2))
-                        {
-                            highest_index = parent.index;
-                            highest_parent = parent.parent.clone();
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                indices[i] = highest_index;
-            }
-        }
-        if sign_changed {
-            let mut count = 0;
-            if !flip {
-                if indices[0] != -1
-                    && indices[1] != -1
-                    && indices[2] != -1
-                    && indices[0] != indices[1]
-                    && indices[1] != indices[3]
-                {
-                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[1] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
-                    count += 1;
-                }
-                if indices[0] != -1
-                    && indices[2] != -1
-                    && indices[3] != -1
-                    && indices[0] != indices[2]
-                    && indices[2] != indices[3]
-                {
-                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[2] & 0x0FFFFFFF) as u32);
-                    count += 1;
-                }
-            } else {
-                if indices[0] != -1
-                    && indices[3] != -1
-                    && indices[1] != -1
-                    && indices[0] != indices[1]
-                    && indices[1] != indices[3]
-                {
-                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[1] & 0x0FFFFFFF) as u32);
-                    count += 1;
-                }
-                if indices[0] != -1
-                    && indices[2] != -1
-                    && indices[3] != -1
-                    && indices[0] != indices[2]
-                    && indices[2] != indices[3]
-                {
-                    indexes.push((indices[0] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[2] & 0x0FFFFFFF) as u32);
-                    indexes.push((indices[3] & 0x0FFFFFFF) as u32);
-                    count += 1;
-                }
-            }
-            if count > 0 {
-                tri_count.push(count);
             }
         }
     }
@@ -693,7 +456,7 @@ impl OctreeNode {
         for child_opt in &self.children {
             if let Some(child) = child_opt {
                 for v_arc in &child.vertices {
-                    let mut v = v_arc.lock().unwrap();
+                    let mut v = v_arc.lock();
                     if v.surface_index == -1 {
                         v.surface_index = highest_index;
                         highest_index += 1;
@@ -714,7 +477,7 @@ impl OctreeNode {
             let mut euler = 0;
             let mut e = 0;
             for v_arc in &collected_vertices {
-                let v = v_arc.lock().unwrap();
+                let v = v_arc.lock();
                 if v.surface_index == i {
                     if let Some(ref eis) = v.eis {
                         for k in 0..3 {
@@ -760,7 +523,7 @@ impl OctreeNode {
             new_vertex.error = new_vertex.qef.get_error();
             let new_vertex_arc = Arc::new(Mutex::new(new_vertex));
             for v_arc in &collected_vertices {
-                let mut v = v_arc.lock().unwrap();
+                let mut v = v_arc.lock();
                 if v.surface_index == i {
                     if !Arc::ptr_eq(v_arc, &new_vertex_arc) {
                         v.parent = Some(Arc::clone(&new_vertex_arc));
@@ -772,7 +535,7 @@ impl OctreeNode {
             new_vertices.push(new_vertex_arc);
         }
         for v_arc in &collected_vertices {
-            let mut v = v_arc.lock().unwrap();
+            let mut v = v_arc.lock();
             v.surface_index = -1;
         }
         self.vertices = new_vertices;
@@ -920,7 +683,7 @@ fn cluster_indexes(
             if !skip && index < node.vertices.len() {
                 let mut vertex_arc = Arc::clone(&node.vertices[index]);
                 loop {
-                    let v = vertex_arc.lock().unwrap();
+                    let v = vertex_arc.lock();
                     match v.parent.as_ref() {
                         Some(parent) => {
                             let new_arc = Arc::clone(parent);
@@ -942,7 +705,7 @@ fn cluster_indexes(
     for i in 0..4 {
         if let Some(ref v_arc) = vertices[i] {
             let (current_surface_index, needs_reassignment) = {
-                let v = v_arc.lock().unwrap();
+                let v = v_arc.lock();
                 let current = v.surface_index;
                 let needs = current != -1 && surface_index != -1 && surface_index != current;
                 (current, needs)
@@ -960,7 +723,7 @@ fn cluster_indexes(
     }
     for i in 0..4 {
         if let Some(ref v_arc) = vertices[i] {
-            let mut v = v_arc.lock().unwrap();
+            let mut v = v_arc.lock();
             if v.surface_index == -1 {
                 collected_vertices.push(Arc::clone(v_arc));
             }
@@ -971,9 +734,241 @@ fn cluster_indexes(
 
 fn assign_surface(vertices: &mut Vec<Arc<Mutex<Vertex>>>, from: i32, to: i32) {
     for v_arc in vertices {
-        let mut v = v_arc.lock().unwrap();
+        let mut v = v_arc.lock();
         if v.surface_index == from {
             v.surface_index = to;
+        }
+    }
+}
+
+fn process_indexes(
+    nodes: &[Option<&OctreeNode>; 4],
+    direction: i32,
+    indexes: &mut Vec<u32>,
+    tri_count: &mut Vec<i32>,
+    threshold: f32,
+    enforce_manifold: bool,
+) {
+    let mut min_size = 10000000;
+    let mut indices = [-1i32; 4];
+    let mut flip = false;
+    let mut sign_changed = false;
+    for i in 0..4 {
+        if let Some(node) = nodes[i] {
+            let edge = T_PROCESS_EDGE_MASK[direction as usize][i];
+            let c1 = T_EDGE_PAIRS[edge as usize][0];
+            let c2 = T_EDGE_PAIRS[edge as usize][1];
+            let m1 = (node.corners >> c1) & 1;
+            let m2 = (node.corners >> c2) & 1;
+            if node.size < min_size {
+                min_size = node.size;
+                flip = m1 == 1;
+                sign_changed = (m1 == 0 && m2 != 0) || (m1 != 0 && m2 == 0);
+            }
+            let mut index = 0;
+            let mut skip = false;
+            for k in 0..16 {
+                let e = TRANSFORMED_EDGES_TABLE[node.corners as usize][k];
+                if e == -1 {
+                    index += 1;
+                    continue;
+                }
+                if e == -2 {
+                    skip = true;
+                    break;
+                }
+                if e == edge as i32 {
+                    break;
+                }
+            }
+            if skip {
+                continue;
+            }
+            if index >= node.vertices.len() {
+                return;
+            }
+            let v = node.vertices[index].lock();
+            let mut highest_index = v.index;
+            let mut highest_parent = v.parent.clone();
+            loop {
+                if let Some(parent_arc) = highest_parent.take() {
+                    let parent = parent_arc.lock();
+                    if parent.error <= threshold
+                        && (!enforce_manifold || (parent.euler == 1 && parent.face_prop2))
+                    {
+                        highest_index = parent.index;
+                        highest_parent = parent.parent.clone();
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            indices[i] = highest_index;
+        }
+    }
+    if sign_changed {
+        let mut count = 0;
+        if !flip {
+            if indices[0] != -1
+                && indices[1] != -1
+                && indices[2] != -1
+                && indices[0] != indices[1]
+                && indices[1] != indices[3]
+            {
+                indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[1] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[3] & 0x0FFFFFFF) as u32);
+                count += 1;
+            }
+            if indices[0] != -1
+                && indices[2] != -1
+                && indices[3] != -1
+                && indices[0] != indices[2]
+                && indices[2] != indices[3]
+            {
+                indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[3] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[2] & 0x0FFFFFFF) as u32);
+                count += 1;
+            }
+        } else {
+            if indices[0] != -1
+                && indices[3] != -1
+                && indices[1] != -1
+                && indices[0] != indices[1]
+                && indices[1] != indices[3]
+            {
+                indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[3] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[1] & 0x0FFFFFFF) as u32);
+                count += 1;
+            }
+            if indices[0] != -1
+                && indices[2] != -1
+                && indices[3] != -1
+                && indices[0] != indices[2]
+                && indices[2] != indices[3]
+            {
+                indexes.push((indices[0] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[2] & 0x0FFFFFFF) as u32);
+                indexes.push((indices[3] & 0x0FFFFFFF) as u32);
+                count += 1;
+            }
+        }
+        if count > 0 {
+            tri_count.push(count);
+        }
+    }
+}
+
+fn process_edge(
+    nodes: &[Option<&OctreeNode>; 4],
+    direction: i32,
+    indexes: &mut Vec<u32>,
+    tri_count: &mut Vec<i32>,
+    threshold: f32,
+    enforce_manifold: bool,
+) {
+    if nodes[0].is_none() || nodes[1].is_none() || nodes[2].is_none() || nodes[3].is_none() {
+        return;
+    }
+    if nodes[0].unwrap().node_type == NodeType::Leaf
+        && nodes[1].unwrap().node_type == NodeType::Leaf
+        && nodes[2].unwrap().node_type == NodeType::Leaf
+        && nodes[3].unwrap().node_type == NodeType::Leaf
+    {
+        process_indexes(
+            nodes,
+            direction,
+            indexes,
+            tri_count,
+            threshold,
+            enforce_manifold,
+        );
+    } else {
+        for i in 0..2 {
+            let mut edge_nodes = [None, None, None, None];
+            for j in 0..4 {
+                if let Some(node) = nodes[j] {
+                    if node.node_type == NodeType::Leaf {
+                        edge_nodes[j] = Some(node);
+                    } else {
+                        let idx = T_EDGE_PROC_EDGE_MASK[direction as usize][i][j];
+                        edge_nodes[j] = node.children[idx as usize].as_ref().map(|b| b.as_ref());
+                    }
+                }
+            }
+            process_edge(
+                &edge_nodes,
+                T_EDGE_PROC_EDGE_MASK[direction as usize][i][4] as i32,
+                indexes,
+                tri_count,
+                threshold,
+                enforce_manifold,
+            );
+        }
+    }
+}
+
+fn process_face(
+    nodes: &[Option<&OctreeNode>; 2],
+    direction: i32,
+    indexes: &mut Vec<u32>,
+    tri_count: &mut Vec<i32>,
+    threshold: f32,
+    enforce_manifold: bool,
+) {
+    if nodes[0].is_none() || nodes[1].is_none() {
+        return;
+    }
+    let node0 = nodes[0].unwrap();
+    let node1 = nodes[1].unwrap();
+    if node0.node_type != NodeType::Leaf || node1.node_type != NodeType::Leaf {
+        for i in 0..4 {
+            let mut face_nodes = [None, None];
+            for j in 0..2 {
+                if let Some(node) = nodes[j] {
+                    if node.node_type == NodeType::Leaf {
+                        face_nodes[j] = Some(node);
+                    } else {
+                        let idx = T_FACE_PROC_FACE_MASK[direction as usize][i][j];
+                        face_nodes[j] = node.children[idx as usize].as_ref().map(|b| b.as_ref());
+                    }
+                }
+            }
+            process_face(
+                &face_nodes,
+                T_FACE_PROC_FACE_MASK[direction as usize][i][2] as i32,
+                indexes,
+                tri_count,
+                threshold,
+                enforce_manifold,
+            );
+        }
+        let orders = [[0, 0, 1, 1], [0, 1, 0, 1]];
+        for i in 0..4 {
+            let mut edge_nodes = [None, None, None, None];
+            for j in 0..4 {
+                let order_idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][0];
+                if let Some(node) = nodes[orders[order_idx as usize][j]] {
+                    if node.node_type == NodeType::Leaf {
+                        edge_nodes[j] = Some(node);
+                    } else {
+                        let idx = T_FACE_PROC_EDGE_MASK[direction as usize][i][1 + j];
+                        edge_nodes[j] = node.children[idx as usize].as_ref().map(|b| b.as_ref());
+                    }
+                }
+            }
+            process_edge(
+                &edge_nodes,
+                T_FACE_PROC_EDGE_MASK[direction as usize][i][5] as i32,
+                indexes,
+                tri_count,
+                threshold,
+                enforce_manifold,
+            );
         }
     }
 }

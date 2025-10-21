@@ -1,11 +1,14 @@
 // Manifold Dual Contouring
 // https://github.com/Lin20/isosurface/tree/master/Isosurface/Isosurface/ManifoldDC
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use glam::Vec3;
 
-use crate::mdc::{octree::OctreeNode, sampler::Sampler};
+use crate::mdc::{
+    octree::{ENFORCE_MANIFOLD, OctreeNode},
+    sampler::Sampler,
+};
 
 pub struct MeshBuffers {
     pub positions: Vec<[f32; 3]>,
@@ -32,10 +35,6 @@ impl Default for MeshBuffers {
     }
 }
 
-pub fn set_enforce_manifold(enforce: bool) {
-    OctreeNode::set_enforce_manifold(enforce);
-}
-
 pub fn mdc_mesh_generation<S>(
     threshold: f32,
     mesh_buffers: &mut MeshBuffers,
@@ -46,7 +45,7 @@ pub fn mdc_mesh_generation<S>(
 ) where
     S: Sampler + Send + Sync + 'static,
 {
-    OctreeNode::set_enforce_manifold(enforce_manifold);
+    ENFORCE_MANIFOLD.store(enforce_manifold, Ordering::Relaxed);
     let mut tree = Box::new(OctreeNode::new());
     tree.construct_base(resolution, mesh_buffers, Arc::new(sampler));
     tree.cluster_cell_base(0.0);
@@ -61,8 +60,14 @@ pub(crate) fn calculate_indexes(
     flat_shading: bool,
 ) {
     mesh_buffers.indices.clear();
+    let enforce_manifold = ENFORCE_MANIFOLD.load(Ordering::Relaxed);
     let mut tri_count = Vec::new();
-    tree.process_cell(&mut mesh_buffers.indices, &mut tri_count, threshold);
+    tree.process_cell(
+        &mut mesh_buffers.indices,
+        &mut tri_count,
+        threshold,
+        enforce_manifold,
+    );
     if !flat_shading {
         if mesh_buffers.indices.is_empty() {
             return;
