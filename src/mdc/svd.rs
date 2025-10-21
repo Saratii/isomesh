@@ -1,3 +1,7 @@
+//Note this uses a heavily optimized Jacobi SVD for symmetric 3x3 matrices instead of a general SVD.
+//This is because the ATA matrix in QEF is always symmetric, and a general SVD is overkill and slower.
+//Implementing proper math may yield more accurate results if the normals ever become low quality.
+
 use std::f32::consts::SQRT_2;
 
 use glam::Vec3;
@@ -80,28 +84,16 @@ pub fn calc_error_smat(orig_a: &SMat3, x: Vec3, b: Vec3) -> f32 {
     a.m11 = orig_a.m11;
     a.m12 = orig_a.m12;
     a.m22 = orig_a.m22;
-    let vtmp = a.vmul(x);
-    let vtmp = b - vtmp;
-    vtmp.length_squared()
+    (b - a.vmul(x)).length_squared()
 }
 
-pub(crate) fn pinv(x: f32, tol: f32) -> f32 {
-    if x.abs() < tol || (1.0 / x).abs() < tol {
-        0.0
-    } else {
-        1.0 / x
-    }
+#[inline(always)]
+fn pinv(x: f32, tol: f32) -> f32 {
+    if x.abs() < tol { 0.0 } else { 1.0 / x }
 }
 
 pub(crate) fn pseudo_inverse(d: &SMat3, tol: f32) -> Mat3 {
-    let mut m = Mat3::ZERO;
-    let d0 = pinv(d.m00, tol);
-    let d1 = pinv(d.m11, tol);
-    let d2 = pinv(d.m22, tol);
-    m.m00 = d0;
-    m.m11 = d1;
-    m.m22 = d2;
-    m
+    Mat3::from_diagonal(pinv(d.m00, tol), pinv(d.m11, tol), pinv(d.m22, tol))
 }
 
 pub(crate) fn solve_symmetric(

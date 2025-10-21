@@ -83,6 +83,7 @@ pub(crate) fn get_normal<S: Sampler>(v: Vec3, sampler: &S) -> Vec3 {
     grad.normalize()
 }
 
+#[inline]
 pub(crate) fn get_intersection(p1: Vec3, p2: Vec3, d1: f32, d2: f32) -> Vec3 {
     p1 + (-d1) * (p2 - p1) / (d2 - d1)
 }
@@ -104,6 +105,7 @@ impl SphereSampler {
 }
 
 impl Sampler for SphereSampler {
+    #[inline]
     fn sample(&self, point: Vec3) -> f32 {
         (point - self.center).length() - self.radius
     }

@@ -47,6 +47,22 @@ impl Mat3 {
             self.m20 * v.x + self.m21 * v.y + self.m22 * v.z,
         )
     }
+
+    #[must_use]
+    #[inline]
+    pub(crate) fn from_diagonal(m00: f32, m11: f32, m22: f32) -> Self {
+        Self {
+            m00,
+            m01: 0.0,
+            m02: 0.0,
+            m10: 0.0,
+            m11,
+            m12: 0.0,
+            m20: 0.0,
+            m21: 0.0,
+            m22,
+        }
+    }
 }
 
 #[inline]
