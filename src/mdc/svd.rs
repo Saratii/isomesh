@@ -2,27 +2,54 @@ use std::f32::consts::SQRT_2;
 
 use glam::Vec3;
 
-use crate::mdc::{mat3::Mat3, smat3::SMat3};
+use crate::mdc::{
+    mat3::{Mat3, calc_symmetric_givens_coefficients},
+    smat3::SMat3,
+};
 
 pub fn rotate01(vtav: &mut SMat3) {
     if vtav.m01 == 0.0 {
         return;
     }
-    vtav.rot01();
+    let (c, s) = calc_symmetric_givens_coefficients(vtav.m00, vtav.m01, vtav.m11);
+    let cc = c * c;
+    let ss = s * s;
+    let mix = 2.0 * c * s * vtav.m01;
+    vtav.m00 = cc * vtav.m00 - mix + ss * vtav.m11;
+    vtav.m01 = 0.0;
+    vtav.m02 = c * vtav.m02 - s * vtav.m12;
+    vtav.m11 = ss * vtav.m00 + mix + cc * vtav.m11;
+    vtav.m12 = s * vtav.m02 + c * vtav.m12;
 }
 
 pub fn rotate02(vtav: &mut SMat3) {
     if vtav.m02 == 0.0 {
         return;
     }
-    vtav.rot02();
+    let (c, s) = calc_symmetric_givens_coefficients(vtav.m00, vtav.m02, vtav.m22);
+    let cc = c * c;
+    let ss = s * s;
+    let mix = 2.0 * c * s * vtav.m02;
+    vtav.m00 = cc * vtav.m00 - mix + ss * vtav.m22;
+    vtav.m01 = c * vtav.m01 - s * vtav.m12;
+    vtav.m02 = 0.0;
+    vtav.m12 = s * vtav.m01 + c * vtav.m12;
+    vtav.m22 = ss * vtav.m00 + mix + cc * vtav.m22;
 }
 
 pub fn rotate12(vtav: &mut SMat3) {
     if vtav.m12 == 0.0 {
         return;
     }
-    vtav.rot12();
+    let (c, s) = calc_symmetric_givens_coefficients(vtav.m11, vtav.m12, vtav.m22);
+    let cc = c * c;
+    let ss = s * s;
+    let mix = 2.0 * c * s * vtav.m12;
+    vtav.m01 = c * vtav.m01 - s * vtav.m02;
+    vtav.m02 = s * vtav.m01 + c * vtav.m02;
+    vtav.m11 = cc * vtav.m11 - mix + ss * vtav.m22;
+    vtav.m12 = 0.0;
+    vtav.m22 = ss * vtav.m11 + mix + cc * vtav.m22;
 }
 
 pub fn get_symmetric_svd(a: &SMat3, tol: f32, max_sweeps: i32) -> (SMat3, Mat3) {
@@ -55,7 +82,7 @@ pub fn calc_error_smat(orig_a: &SMat3, x: Vec3, b: Vec3) -> f32 {
     a.m22 = orig_a.m22;
     let vtmp = a.vmul(x);
     let vtmp = b - vtmp;
-    vtmp.x * vtmp.x + vtmp.y * vtmp.y + vtmp.z * vtmp.z
+    vtmp.length_squared()
 }
 
 pub(crate) fn pinv(x: f32, tol: f32) -> f32 {
