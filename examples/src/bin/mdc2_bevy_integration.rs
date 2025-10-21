@@ -10,8 +10,8 @@ use bevy::{
     },
 };
 use isomesh::{
-    mdc::sampler::{CuboidSampler, SphereSampler},
-    mdc2::{mdc::mdc_mesh_generation, octree::MeshVertex},
+    manifold_dual_contouring::sampler::{CuboidSampler, SphereSampler},
+    manifold_dual_contouring_2::{mdc::mdc_mesh_generation, octree::MeshVertex},
 };
 
 fn main() {

@@ -12,7 +12,7 @@ use bevy::{
     },
 };
 //use isomesh::mdc::sampler::FunBlobSampler;
-use isomesh::mdc::{
+use isomesh::manifold_dual_contouring::{
     mdc::{mdc_mesh_generation, MeshBuffers},
     sampler::FunSurfaceSampler,
 };
