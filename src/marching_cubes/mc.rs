@@ -484,7 +484,7 @@ fn calculate_vertex_normal(
         sdf_values_per_chunk_dim,
     );
 
-    Vec3::new(-grad_x, -grad_y, -grad_z).normalize_or_zero()
+    Vec3::new(-grad_x, grad_y, -grad_z).normalize_or_zero()
 }
 
 fn sample_sdf_at_point_with_interpolation(
