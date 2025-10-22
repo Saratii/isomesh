@@ -175,7 +175,7 @@ pub fn mc_mesh_generation_with_color(
 fn calculate_cube_index(values: &[f32; 8]) -> u8 {
     let mut cube_index = 0;
     for i in 0..8 {
-        if values[i] < 0.0 {
+        if values[i] > 0.0 {
             cube_index |= 1 << i;
         }
     }
@@ -313,7 +313,7 @@ fn get_or_create_edge_vertex(
     let material = if vertex_cache.color_provider.needs_material() {
         let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
         let val1 = values[v1_idx];
-        let solid_corner = if val1 < 0.0 { v1_idx } else { v2_idx };
+        let solid_corner = if val1 >= 0.0 { v1_idx } else { v2_idx };
         voxel_data_from_index(
             cube_x,
             cube_y,
@@ -483,8 +483,7 @@ fn calculate_vertex_normal(
         densities,
         sdf_values_per_chunk_dim,
     );
-
-    Vec3::new(-grad_x, grad_y, -grad_z).normalize_or_zero()
+    Vec3::new(-grad_x, -grad_y, -grad_z).normalize_or_zero()
 }
 
 fn sample_sdf_at_point_with_interpolation(
