@@ -175,7 +175,7 @@ pub fn mc_mesh_generation_with_color(
 fn calculate_cube_index(values: &[f32; 8]) -> u8 {
     let mut cube_index = 0;
     for i in 0..8 {
-        if values[i] > 0.0 {
+        if values[i] < 0.0 {
             cube_index |= 1 << i;
         }
     }
@@ -288,7 +288,7 @@ fn triangulate_cube_with_cache(
                 materials,
                 samples_per_chunk_dim,
             );
-            result.push([v1, v2, v3]);
+            result.push([v1, v3, v2]);
             i += 3;
         } else {
             break;
@@ -313,7 +313,7 @@ fn get_or_create_edge_vertex(
     let material = if vertex_cache.color_provider.needs_material() {
         let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
         let val1 = values[v1_idx];
-        let solid_corner = if val1 >= 0.0 { v1_idx } else { v2_idx };
+        let solid_corner = if val1 < 0.0 { v1_idx } else { v2_idx };
         voxel_data_from_index(
             cube_x,
             cube_y,
@@ -325,7 +325,6 @@ fn get_or_create_edge_vertex(
     } else {
         0
     };
-
     vertex_cache.get_or_create_vertex(edge_id, position, material)
 }
 
