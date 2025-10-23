@@ -2,17 +2,10 @@ use std::collections::HashMap;
 
 use glam::Vec3;
 
-use crate::marching_cubes::color_provider::{ColorProvider, NormalColorProvider, normal_to_color};
-use crate::marching_cubes::tables::TRIANGLE_TABLE;
-
-pub const SDF_VALUES_PER_CHUNK_DIM: usize = 64; // Number of voxel sample points
-pub const VOXEL_SIZE: f32 = 2.0; // Size of each voxel
-pub const CHUNK_SIZE: f32 = CUBES_PER_CHUNK_DIM as f32 * VOXEL_SIZE;
-pub const CUBES_PER_CHUNK_DIM: usize = SDF_VALUES_PER_CHUNK_DIM - 1;
-
-pub const VOXELS_PER_CHUNK: usize =
-    SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM;
-pub const HALF_CHUNK: f32 = CHUNK_SIZE / 2.0;
+use crate::marching_cubes::{
+    color_provider::{ColorProvider, normal_to_color},
+    tables::{EDGE_VERTICES, TRIANGLE_TABLE},
+};
 
 pub struct MeshBuffers {
     pub positions: Vec<[f32; 3]>,
@@ -23,7 +16,6 @@ pub struct MeshBuffers {
 }
 
 impl MeshBuffers {
-    #[inline]
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),
@@ -35,21 +27,6 @@ impl MeshBuffers {
     }
 }
 
-const EDGE_VERTICES: [(usize, usize); 12] = [
-    (0, 1),
-    (1, 2),
-    (2, 3),
-    (3, 0), // Bottom
-    (4, 5),
-    (5, 6),
-    (6, 7),
-    (7, 4), // Top
-    (0, 4),
-    (1, 5),
-    (2, 6),
-    (3, 7), // Vertical
-];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct EdgeId {
     x: usize,
@@ -58,31 +35,34 @@ struct EdgeId {
     direction: u8,
 }
 
-struct VertexCache<'a> {
+struct VertexCache {
     edge_to_vertex: HashMap<EdgeId, u32>,
     vertices: Vec<Vec3>,
     colors: Vec<[f32; 4]>,
     uvs: Vec<[f32; 2]>,
-    color_provider: &'a dyn ColorProvider,
 }
 
-impl<'a> VertexCache<'a> {
-    fn new(color_provider: &'a dyn ColorProvider) -> Self {
+impl VertexCache {
+    fn new() -> Self {
         Self {
             edge_to_vertex: HashMap::new(),
             vertices: Vec::new(),
             colors: Vec::new(),
             uvs: Vec::new(),
-            color_provider,
         }
     }
 
-    fn get_or_create_vertex(&mut self, edge_id: EdgeId, position: Vec3, material: u8) -> u32 {
+    fn get_or_create_vertex(
+        &mut self,
+        edge_id: EdgeId,
+        position: Vec3,
+        color: [f32; 4],
+        material: u8,
+    ) -> u32 {
         if let Some(&vertex_index) = self.edge_to_vertex.get(&edge_id) {
             vertex_index
         } else {
             let vertex_index = self.vertices.len() as u32;
-            let color = self.color_provider.get_color(material, position);
             let uv = generate_uv_coordinates(position, material);
             self.vertices.push(position);
             self.colors.push(color);
@@ -100,7 +80,9 @@ fn voxel_data_from_index(
     corner: usize,
     materials: &[u8],
     samples_per_chunk_dim: usize,
-) -> u8 {
+    position: Vec3,
+    color_provider: &dyn ColorProvider,
+) -> ([f32; 4], u8) {
     let (dx, dy, dz) = match corner {
         0 => (0, 0, 0),
         1 => (1, 0, 0),
@@ -116,7 +98,10 @@ fn voxel_data_from_index(
     let y = cube_y + dy;
     let z = cube_z + dz;
     let idx = z * samples_per_chunk_dim * samples_per_chunk_dim + y * samples_per_chunk_dim + x;
-    materials[idx]
+    let material = materials[idx];
+    let color = color_provider.get_color(material, position);
+
+    (color, material)
 }
 
 pub fn mc_mesh_generation(
@@ -125,26 +110,11 @@ pub fn mc_mesh_generation(
     materials: &[u8],
     cubes_per_chunk_dim: usize,
     samples_per_chunk_dim: usize,
-) {
-    mc_mesh_generation_with_color(
-        mesh_buffers,
-        densities,
-        materials,
-        cubes_per_chunk_dim,
-        samples_per_chunk_dim,
-        &NormalColorProvider,
-    )
-}
-
-pub fn mc_mesh_generation_with_color(
-    mesh_buffers: &mut MeshBuffers,
-    densities: &[i16],
-    materials: &[u8],
-    cubes_per_chunk_dim: usize,
-    samples_per_chunk_dim: usize,
     color_provider: &dyn ColorProvider,
+    half_chunk: f32,
+    voxel_size: f32,
 ) {
-    let mut vertex_cache = VertexCache::new(color_provider);
+    let mut vertex_cache = VertexCache::new();
     let mut indices = Vec::new();
     for x in 0..cubes_per_chunk_dim {
         for y in 0..cubes_per_chunk_dim {
@@ -158,16 +128,21 @@ pub fn mc_mesh_generation_with_color(
                     densities,
                     materials,
                     samples_per_chunk_dim,
+                    color_provider,
+                    half_chunk,
+                    voxel_size,
                 );
             }
         }
     }
-    build_mesh_from_cache_and_indices(
+    build_mesh_buffers_from_cache_and_indices(
+        mesh_buffers,
         vertex_cache,
         indices,
         densities,
         samples_per_chunk_dim,
-        mesh_buffers,
+        half_chunk,
+        voxel_size,
         color_provider,
     );
 }
@@ -182,24 +157,24 @@ fn calculate_cube_index(values: &[f32; 8]) -> u8 {
     cube_index
 }
 
-fn get_cube_vertices(x: usize, y: usize, z: usize) -> [Vec3; 8] {
-    let start_pos = Vec3::splat(-HALF_CHUNK);
-    let base_x = start_pos.x + x as f32 * VOXEL_SIZE;
-    let base_y = start_pos.y + y as f32 * VOXEL_SIZE;
-    let base_z = start_pos.z + z as f32 * VOXEL_SIZE;
+fn get_cube_vertices(x: usize, y: usize, z: usize, half_chunk: f32, voxel_size: f32) -> [Vec3; 8] {
+    let start_pos = Vec3::splat(-half_chunk);
+    let base_x = start_pos.x + x as f32 * voxel_size;
+    let base_y = start_pos.y + y as f32 * voxel_size;
+    let base_z = start_pos.z + z as f32 * voxel_size;
     [
         Vec3::new(base_x, base_y, base_z),
-        Vec3::new(base_x + VOXEL_SIZE, base_y, base_z),
-        Vec3::new(base_x + VOXEL_SIZE, base_y + VOXEL_SIZE, base_z),
-        Vec3::new(base_x, base_y + VOXEL_SIZE, base_z),
-        Vec3::new(base_x, base_y, base_z + VOXEL_SIZE),
-        Vec3::new(base_x + VOXEL_SIZE, base_y, base_z + VOXEL_SIZE),
+        Vec3::new(base_x + voxel_size, base_y, base_z),
+        Vec3::new(base_x + voxel_size, base_y + voxel_size, base_z),
+        Vec3::new(base_x, base_y + voxel_size, base_z),
+        Vec3::new(base_x, base_y, base_z + voxel_size),
+        Vec3::new(base_x + voxel_size, base_y, base_z + voxel_size),
         Vec3::new(
-            base_x + VOXEL_SIZE,
-            base_y + VOXEL_SIZE,
-            base_z + VOXEL_SIZE,
+            base_x + voxel_size,
+            base_y + voxel_size,
+            base_z + voxel_size,
         ),
-        Vec3::new(base_x, base_y + VOXEL_SIZE, base_z + VOXEL_SIZE),
+        Vec3::new(base_x, base_y + voxel_size, base_z + voxel_size),
     ]
 }
 
@@ -212,8 +187,11 @@ fn process_cube_with_cache(
     densities: &[i16],
     materials: &[u8],
     samples_per_chunk_dim: usize,
+    color_provider: &dyn ColorProvider,
+    half_chunk: f32,
+    voxel_size: f32,
 ) {
-    let cube_vertices = get_cube_vertices(x, y, z);
+    let cube_vertices = get_cube_vertices(x, y, z, half_chunk, voxel_size);
     let cube_values = sample_cube_values_from_sdf(x, y, z, densities, samples_per_chunk_dim);
     let cube_index = calculate_cube_index(&cube_values);
     if cube_index == 0 || cube_index == 255 {
@@ -229,6 +207,10 @@ fn process_cube_with_cache(
         vertex_cache,
         materials,
         samples_per_chunk_dim,
+        color_provider,
+        densities,
+        half_chunk,
+        voxel_size,
     );
     for triangle in triangles {
         indices.extend_from_slice(&triangle);
@@ -249,6 +231,10 @@ fn triangulate_cube_with_cache(
     vertex_cache: &mut VertexCache,
     materials: &[u8],
     samples_per_chunk_dim: usize,
+    color_provider: &dyn ColorProvider,
+    densities: &[i16],
+    half_chunk: f32,
+    voxel_size: f32,
 ) -> Vec<[u32; 3]> {
     let edge_table = get_edge_table_for_cube(cube_index);
     let mut result = Vec::new();
@@ -265,6 +251,10 @@ fn triangulate_cube_with_cache(
                 vertex_cache,
                 materials,
                 samples_per_chunk_dim,
+                color_provider,
+                densities,
+                half_chunk,
+                voxel_size,
             );
             let v2 = get_or_create_edge_vertex(
                 edge_table[i + 1] as usize,
@@ -276,6 +266,10 @@ fn triangulate_cube_with_cache(
                 vertex_cache,
                 materials,
                 samples_per_chunk_dim,
+                color_provider,
+                densities,
+                half_chunk,
+                voxel_size,
             );
             let v3 = get_or_create_edge_vertex(
                 edge_table[i + 2] as usize,
@@ -287,8 +281,12 @@ fn triangulate_cube_with_cache(
                 vertex_cache,
                 materials,
                 samples_per_chunk_dim,
+                color_provider,
+                densities,
+                half_chunk,
+                voxel_size,
             );
-            result.push([v1, v3, v2]);
+            result.push([v1, v2, v3]);
             i += 3;
         } else {
             break;
@@ -307,25 +305,37 @@ fn get_or_create_edge_vertex(
     vertex_cache: &mut VertexCache,
     materials: &[u8],
     samples_per_chunk_dim: usize,
+    color_provider: &dyn ColorProvider,
+    densities: &[i16],
+    half_chunk: f32,
+    voxel_size: f32,
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
+    let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
+    let val1 = values[v1_idx];
     let position = interpolate_edge(edge_index, vertices, values);
-    let material = if vertex_cache.color_provider.needs_material() {
-        let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
-        let val1 = values[v1_idx];
-        let solid_corner = if val1 >= 0.0 { v1_idx } else { v2_idx };
-        voxel_data_from_index(
-            cube_x,
-            cube_y,
-            cube_z,
-            solid_corner,
-            materials,
-            samples_per_chunk_dim,
-        )
-    } else {
-        0
-    };
-    vertex_cache.get_or_create_vertex(edge_id, position, material)
+    let solid_corner = if val1 < 0.0 { v1_idx } else { v2_idx };
+    let normal = calculate_vertex_normal(
+        position,
+        densities,
+        samples_per_chunk_dim,
+        half_chunk,
+        voxel_size,
+    );
+    let (mut color, material) = voxel_data_from_index(
+        cube_x,
+        cube_y,
+        cube_z,
+        solid_corner,
+        materials,
+        samples_per_chunk_dim,
+        position,
+        color_provider,
+    );
+    if !color_provider.needs_material() && color == [1.0, 1.0, 1.0, 1.0] {
+        color = normal_to_color(normal);
+    }
+    vertex_cache.get_or_create_vertex(edge_id, position, color, material)
 }
 
 fn get_canonical_edge_id(edge_index: usize, cube_x: usize, cube_y: usize, cube_z: usize) -> EdgeId {
@@ -430,12 +440,10 @@ fn sample_cube_values_from_sdf(
     y: usize,
     z: usize,
     densities: &[i16],
-    sdf_values_per_chunk_dim: usize,
+    samples_per_chunk_dim: usize,
 ) -> [f32; 8] {
     let get_sdf = |x: usize, y: usize, z: usize| -> f32 {
-        let idx = z * sdf_values_per_chunk_dim * sdf_values_per_chunk_dim
-            + y * sdf_values_per_chunk_dim
-            + x;
+        let idx = z * samples_per_chunk_dim * samples_per_chunk_dim + y * samples_per_chunk_dim + x;
         densities[idx] as f32
     };
     [
@@ -453,47 +461,63 @@ fn sample_cube_values_from_sdf(
 fn calculate_vertex_normal(
     point: Vec3,
     densities: &[i16],
-    sdf_values_per_chunk_dim: usize,
+    samples_per_chunk_dim: usize,
+    half_chunk: f32,
+    voxel_size: f32,
 ) -> Vec3 {
-    let epsilon = VOXEL_SIZE;
+    let epsilon = voxel_size;
     let grad_x = sample_sdf_at_point_with_interpolation(
         point + Vec3::new(epsilon, 0.0, 0.0),
         densities,
-        sdf_values_per_chunk_dim,
+        samples_per_chunk_dim,
+        half_chunk,
+        voxel_size,
     ) - sample_sdf_at_point_with_interpolation(
         point - Vec3::new(epsilon, 0.0, 0.0),
         densities,
-        sdf_values_per_chunk_dim,
+        samples_per_chunk_dim,
+        half_chunk,
+        voxel_size,
     );
     let grad_y = sample_sdf_at_point_with_interpolation(
         point + Vec3::new(0.0, epsilon, 0.0),
         densities,
-        sdf_values_per_chunk_dim,
+        samples_per_chunk_dim,
+        half_chunk,
+        voxel_size,
     ) - sample_sdf_at_point_with_interpolation(
         point - Vec3::new(0.0, epsilon, 0.0),
         densities,
-        sdf_values_per_chunk_dim,
+        samples_per_chunk_dim,
+        half_chunk,
+        voxel_size,
     );
     let grad_z = sample_sdf_at_point_with_interpolation(
         point + Vec3::new(0.0, 0.0, epsilon),
         densities,
-        sdf_values_per_chunk_dim,
+        samples_per_chunk_dim,
+        half_chunk,
+        voxel_size,
     ) - sample_sdf_at_point_with_interpolation(
         point - Vec3::new(0.0, 0.0, epsilon),
         densities,
-        sdf_values_per_chunk_dim,
+        samples_per_chunk_dim,
+        half_chunk,
+        voxel_size,
     );
-    Vec3::new(-grad_x, -grad_y, -grad_z).normalize_or_zero()
+    Vec3::new(grad_x, grad_y, grad_z).normalize_or_zero()
 }
 
 fn sample_sdf_at_point_with_interpolation(
     point: Vec3,
     densities: &[i16],
     samples_per_chunk_dim: usize,
+    half_chunk: f32,
+    voxel_size: f32,
 ) -> f32 {
-    let voxel_x = (point.x + HALF_CHUNK) / VOXEL_SIZE;
-    let voxel_y = (point.y + HALF_CHUNK) / VOXEL_SIZE;
-    let voxel_z = (point.z + HALF_CHUNK) / VOXEL_SIZE;
+    let voxel_x = (point.x + half_chunk) / voxel_size;
+    let voxel_y = (point.y + half_chunk) / voxel_size;
+    let voxel_z = (point.z + half_chunk) / voxel_size;
     let voxel_x = voxel_x.clamp(0.0, (samples_per_chunk_dim - 1) as f32);
     let voxel_y = voxel_y.clamp(0.0, (samples_per_chunk_dim - 1) as f32);
     let voxel_z = voxel_z.clamp(0.0, (samples_per_chunk_dim - 1) as f32);
@@ -527,61 +551,60 @@ fn sample_sdf_at_point_with_interpolation(
     c0 * (1.0 - fz) + c1 * fz
 }
 
-fn build_mesh_from_cache_and_indices(
+fn build_mesh_buffers_from_cache_and_indices(
+    mesh_buffers: &mut MeshBuffers,
     vertex_cache: VertexCache,
     indices: Vec<u32>,
     densities: &[i16],
-    sdf_values_per_chunk_dim: usize,
-    mesh_buffers: &mut MeshBuffers,
+    samples_per_chunk_dim: usize,
+    half_chunk: f32,
+    voxel_size: f32,
     color_provider: &dyn ColorProvider,
 ) {
     if vertex_cache.vertices.is_empty() {
-        mesh_buffers.positions = Vec::new();
-        mesh_buffers.normals = Vec::new();
-        mesh_buffers.colors = Vec::new();
-        mesh_buffers.indices = Vec::new();
-        mesh_buffers.uvs = Vec::new();
-    } else {
-        let positions: Vec<[f32; 3]> = vertex_cache
-            .vertices
-            .iter()
-            .map(|v| [v.x, v.y, v.z])
-            .collect();
-        let normals: Vec<[f32; 3]> = vertex_cache
-            .vertices
-            .iter()
-            .map(|v| calculate_vertex_normal(*v, densities, sdf_values_per_chunk_dim).into())
-            .collect();
-        let colors: Vec<[f32; 4]> = if color_provider.needs_material() {
-            vertex_cache.colors
-        } else {
-            let using_normal_coloring = vertex_cache
-                .colors
-                .iter()
-                .all(|c| c[0] == 1.0 && c[1] == 1.0 && c[2] == 1.0);
-            if using_normal_coloring {
-                normals
-                    .iter()
-                    .map(|n| normal_to_color(Vec3::from_array(*n)))
-                    .collect()
-            } else {
-                vertex_cache.colors
-            }
-        };
-        let uvs: Vec<[f32; 2]> = vertex_cache.uvs;
-        mesh_buffers.colors = colors;
-        mesh_buffers.indices = indices;
-        mesh_buffers.normals = normals;
-        mesh_buffers.positions = positions;
-        mesh_buffers.uvs = uvs;
+        return;
     }
+    let positions: Vec<[f32; 3]> = vertex_cache
+        .vertices
+        .iter()
+        .map(|v| [v.x, v.y, v.z])
+        .collect();
+    let normals: Vec<[f32; 3]> = vertex_cache
+        .vertices
+        .iter()
+        .map(|v| {
+            calculate_vertex_normal(*v, densities, samples_per_chunk_dim, half_chunk, voxel_size)
+                .into()
+        })
+        .collect();
+    let colors = if color_provider.uses_normals() {
+        normals
+            .iter()
+            .map(|n| {
+                let normal = Vec3::from_array(*n);
+                normal_to_color(normal)
+            })
+            .collect()
+    } else {
+        vertex_cache.colors
+    };
+    mesh_buffers.positions = positions;
+    mesh_buffers.normals = normals;
+    mesh_buffers.colors = colors;
+    mesh_buffers.indices = indices;
+    mesh_buffers.uvs = vertex_cache.uvs;
 }
 
 fn wrap01(v: f32) -> f32 {
     ((v % 1.0) + 1.0) % 1.0
 }
 
-fn generate_uv_coordinates(position: Vec3, _material: u8) -> [f32; 2] {
+fn generate_uv_coordinates(position: Vec3, material: u8) -> [f32; 2] {
     let scale = 0.1;
-    [wrap01(position.x * scale), wrap01(position.z * scale)]
+    let base_uv = [wrap01(position.x * scale), wrap01(position.z * scale)];
+    match material {
+        1 => [base_uv[0] * 0.5, base_uv[1]],       // dirt: left half
+        2 => [0.5 + base_uv[0] * 0.5, base_uv[1]], // grass: right half
+        _ => base_uv,
+    }
 }

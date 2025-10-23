@@ -9,14 +9,20 @@ use bevy::{
         RenderPlugin,
     },
 };
+use isomesh::manifold_dual_contouring::sampler::SphereSampler;
 use isomesh::{
     manifold_dual_contouring::sampler::CuboidSampler,
-    marching_cubes::mc::{mc_mesh_generation, MeshBuffers},
+    marching_cubes::{
+        color_provider::NormalColorProvider,
+        mc::{mc_mesh_generation, MeshBuffers},
+    },
 };
-use isomesh::{
-    manifold_dual_contouring::sampler::SphereSampler,
-    marching_cubes::mc::{CUBES_PER_CHUNK_DIM, HALF_CHUNK, SDF_VALUES_PER_CHUNK_DIM},
-};
+
+const SDF_VALUES_PER_CHUNK_DIM: usize = 64; // Number of voxel sample points
+const VOXEL_SIZE: f32 = 1.0; // Size of each voxel in meters
+const CUBES_PER_CHUNK_DIM: usize = SDF_VALUES_PER_CHUNK_DIM - 1; // 63 cubes
+const CHUNK_SIZE: f32 = CUBES_PER_CHUNK_DIM as f32 * VOXEL_SIZE; // 7.875 meters
+const HALF_CHUNK: f32 = CHUNK_SIZE / 2.0;
 
 fn main() {
     App::new()
@@ -58,6 +64,9 @@ fn setup_mdc(
         &[1; SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM],
         CUBES_PER_CHUNK_DIM,
         SDF_VALUES_PER_CHUNK_DIM,
+        &NormalColorProvider,
+        HALF_CHUNK,
+        VOXEL_SIZE,
     );
     let sphere_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((
@@ -87,6 +96,9 @@ fn setup_mdc(
         &[1; SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM],
         CUBES_PER_CHUNK_DIM,
         SDF_VALUES_PER_CHUNK_DIM,
+        &NormalColorProvider,
+        HALF_CHUNK,
+        VOXEL_SIZE,
     );
     let cuboid_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((

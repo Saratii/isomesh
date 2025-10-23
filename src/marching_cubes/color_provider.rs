@@ -6,6 +6,10 @@ pub trait ColorProvider: Send + Sync {
     fn needs_material(&self) -> bool {
         false
     }
+
+    fn uses_normals(&self) -> bool {
+        false
+    }
 }
 
 pub struct NormalColorProvider;
@@ -17,6 +21,10 @@ impl ColorProvider for NormalColorProvider {
 
     fn needs_material(&self) -> bool {
         false
+    }
+
+    fn uses_normals(&self) -> bool {
+        true
     }
 }
 
