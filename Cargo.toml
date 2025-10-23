@@ -20,6 +20,10 @@ members = ["examples"]
 name = "mdc_bench"
 harness = false
 
+[[bench]]
+name = "mc_bench"
+harness = false
+
 [profile.bench]
 debug = true
 

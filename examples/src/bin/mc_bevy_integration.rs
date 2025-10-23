@@ -18,9 +18,9 @@ use isomesh::{
     },
 };
 
-const SDF_VALUES_PER_CHUNK_DIM: usize = 64; // Number of voxel sample points
+const SAMPLES_PER_CHUNK_DIM: usize = 64; // Number of voxel sample points
 const VOXEL_SIZE: f32 = 1.0; // Size of each voxel in meters
-const CUBES_PER_CHUNK_DIM: usize = SDF_VALUES_PER_CHUNK_DIM - 1; // 63 cubes
+const CUBES_PER_CHUNK_DIM: usize = SAMPLES_PER_CHUNK_DIM - 1; // 63 cubes
 const CHUNK_SIZE: f32 = CUBES_PER_CHUNK_DIM as f32 * VOXEL_SIZE; // 7.875 meters
 const HALF_CHUNK: f32 = CHUNK_SIZE / 2.0;
 
@@ -53,17 +53,17 @@ fn setup_mdc(
         Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
         Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
         (
-            SDF_VALUES_PER_CHUNK_DIM,
-            SDF_VALUES_PER_CHUNK_DIM,
-            SDF_VALUES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM,
         ),
     );
     mc_mesh_generation(
         &mut mesh_buffers,
         &densities,
-        &[1; SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM],
+        &[1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM],
         CUBES_PER_CHUNK_DIM,
-        SDF_VALUES_PER_CHUNK_DIM,
+        SAMPLES_PER_CHUNK_DIM,
         &NormalColorProvider,
         HALF_CHUNK,
         VOXEL_SIZE,
@@ -84,18 +84,18 @@ fn setup_mdc(
         Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
         Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
         (
-            SDF_VALUES_PER_CHUNK_DIM,
-            SDF_VALUES_PER_CHUNK_DIM,
-            SDF_VALUES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM,
         ),
     );
     let mut mesh_buffers = MeshBuffers::new();
     mc_mesh_generation(
         &mut mesh_buffers,
         &densities,
-        &[1; SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM * SDF_VALUES_PER_CHUNK_DIM],
+        &[1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM],
         CUBES_PER_CHUNK_DIM,
-        SDF_VALUES_PER_CHUNK_DIM,
+        SAMPLES_PER_CHUNK_DIM,
         &NormalColorProvider,
         HALF_CHUNK,
         VOXEL_SIZE,
