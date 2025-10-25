@@ -108,12 +108,12 @@ pub fn mc_mesh_generation(
     mesh_buffers: &mut MeshBuffers,
     densities: &[i16],
     materials: &[u8],
-    cubes_per_chunk_dim: usize,
     samples_per_chunk_dim: usize,
     color_provider: &dyn ColorProvider,
-    half_chunk: f32,
-    voxel_size: f32,
+    half_extent: f32,
 ) {
+    let cubes_per_chunk_dim = samples_per_chunk_dim - 1;
+    let voxel_size = (half_extent * 2.0) / (samples_per_chunk_dim - 1) as f32;
     let mut vertex_cache = VertexCache::new();
     let mut indices = Vec::new();
     for x in 0..cubes_per_chunk_dim {
@@ -129,7 +129,7 @@ pub fn mc_mesh_generation(
                     materials,
                     samples_per_chunk_dim,
                     color_provider,
-                    half_chunk,
+                    half_extent,
                     voxel_size,
                 );
             }
@@ -141,7 +141,7 @@ pub fn mc_mesh_generation(
         indices,
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
         color_provider,
     );
@@ -157,8 +157,8 @@ fn calculate_cube_index(values: &[f32; 8]) -> u8 {
     cube_index
 }
 
-fn get_cube_vertices(x: usize, y: usize, z: usize, half_chunk: f32, voxel_size: f32) -> [Vec3; 8] {
-    let start_pos = Vec3::splat(-half_chunk);
+fn get_cube_vertices(x: usize, y: usize, z: usize, half_extent: f32, voxel_size: f32) -> [Vec3; 8] {
+    let start_pos = Vec3::splat(-half_extent);
     let base_x = start_pos.x + x as f32 * voxel_size;
     let base_y = start_pos.y + y as f32 * voxel_size;
     let base_z = start_pos.z + z as f32 * voxel_size;
@@ -188,10 +188,10 @@ fn process_cube_with_cache(
     materials: &[u8],
     samples_per_chunk_dim: usize,
     color_provider: &dyn ColorProvider,
-    half_chunk: f32,
+    half_extent: f32,
     voxel_size: f32,
 ) {
-    let cube_vertices = get_cube_vertices(x, y, z, half_chunk, voxel_size);
+    let cube_vertices = get_cube_vertices(x, y, z, half_extent, voxel_size);
     let cube_values = sample_cube_values_from_sdf(x, y, z, densities, samples_per_chunk_dim);
     let cube_index = calculate_cube_index(&cube_values);
     if cube_index == 0 || cube_index == 255 {
@@ -209,7 +209,7 @@ fn process_cube_with_cache(
         samples_per_chunk_dim,
         color_provider,
         densities,
-        half_chunk,
+        half_extent,
         voxel_size,
     );
     for triangle in triangles {
@@ -233,7 +233,7 @@ fn triangulate_cube_with_cache(
     samples_per_chunk_dim: usize,
     color_provider: &dyn ColorProvider,
     densities: &[i16],
-    half_chunk: f32,
+    half_extent: f32,
     voxel_size: f32,
 ) -> Vec<[u32; 3]> {
     let edge_table = get_edge_table_for_cube(cube_index);
@@ -253,7 +253,7 @@ fn triangulate_cube_with_cache(
                 samples_per_chunk_dim,
                 color_provider,
                 densities,
-                half_chunk,
+                half_extent,
                 voxel_size,
             );
             let v2 = get_or_create_edge_vertex(
@@ -268,7 +268,7 @@ fn triangulate_cube_with_cache(
                 samples_per_chunk_dim,
                 color_provider,
                 densities,
-                half_chunk,
+                half_extent,
                 voxel_size,
             );
             let v3 = get_or_create_edge_vertex(
@@ -283,7 +283,7 @@ fn triangulate_cube_with_cache(
                 samples_per_chunk_dim,
                 color_provider,
                 densities,
-                half_chunk,
+                half_extent,
                 voxel_size,
             );
             result.push([v1, v2, v3]);
@@ -307,7 +307,7 @@ fn get_or_create_edge_vertex(
     samples_per_chunk_dim: usize,
     color_provider: &dyn ColorProvider,
     densities: &[i16],
-    half_chunk: f32,
+    half_extent: f32,
     voxel_size: f32,
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
@@ -319,7 +319,7 @@ fn get_or_create_edge_vertex(
         position,
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
     );
     let (mut color, material) = voxel_data_from_index(
@@ -462,7 +462,7 @@ fn calculate_vertex_normal(
     point: Vec3,
     densities: &[i16],
     samples_per_chunk_dim: usize,
-    half_chunk: f32,
+    half_extent: f32,
     voxel_size: f32,
 ) -> Vec3 {
     let epsilon = voxel_size;
@@ -470,39 +470,39 @@ fn calculate_vertex_normal(
         point + Vec3::new(epsilon, 0.0, 0.0),
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
     ) - sample_sdf_at_point_with_interpolation(
         point - Vec3::new(epsilon, 0.0, 0.0),
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
     );
     let grad_y = sample_sdf_at_point_with_interpolation(
         point + Vec3::new(0.0, epsilon, 0.0),
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
     ) - sample_sdf_at_point_with_interpolation(
         point - Vec3::new(0.0, epsilon, 0.0),
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
     );
     let grad_z = sample_sdf_at_point_with_interpolation(
         point + Vec3::new(0.0, 0.0, epsilon),
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
     ) - sample_sdf_at_point_with_interpolation(
         point - Vec3::new(0.0, 0.0, epsilon),
         densities,
         samples_per_chunk_dim,
-        half_chunk,
+        half_extent,
         voxel_size,
     );
     Vec3::new(grad_x, grad_y, grad_z).normalize_or_zero()
@@ -512,12 +512,12 @@ fn sample_sdf_at_point_with_interpolation(
     point: Vec3,
     densities: &[i16],
     samples_per_chunk_dim: usize,
-    half_chunk: f32,
+    half_extent: f32,
     voxel_size: f32,
 ) -> f32 {
-    let voxel_x = (point.x + half_chunk) / voxel_size;
-    let voxel_y = (point.y + half_chunk) / voxel_size;
-    let voxel_z = (point.z + half_chunk) / voxel_size;
+    let voxel_x = (point.x + half_extent) / voxel_size;
+    let voxel_y = (point.y + half_extent) / voxel_size;
+    let voxel_z = (point.z + half_extent) / voxel_size;
     let voxel_x = voxel_x.clamp(0.0, (samples_per_chunk_dim - 1) as f32);
     let voxel_y = voxel_y.clamp(0.0, (samples_per_chunk_dim - 1) as f32);
     let voxel_z = voxel_z.clamp(0.0, (samples_per_chunk_dim - 1) as f32);
@@ -557,7 +557,7 @@ fn build_mesh_buffers_from_cache_and_indices(
     indices: Vec<u32>,
     densities: &[i16],
     samples_per_chunk_dim: usize,
-    half_chunk: f32,
+    half_extent: f32,
     voxel_size: f32,
     color_provider: &dyn ColorProvider,
 ) {
@@ -573,7 +573,7 @@ fn build_mesh_buffers_from_cache_and_indices(
         .vertices
         .iter()
         .map(|v| {
-            calculate_vertex_normal(*v, densities, samples_per_chunk_dim, half_chunk, voxel_size)
+            calculate_vertex_normal(*v, densities, samples_per_chunk_dim, half_extent, voxel_size)
                 .into()
         })
         .collect();

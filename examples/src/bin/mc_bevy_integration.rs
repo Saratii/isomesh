@@ -1,5 +1,5 @@
 use bevy::{
-    pbr::wireframe::{WireframeConfig, WireframePlugin},
+    // pbr::wireframe::{WireframeConfig, WireframePlugin},
     prelude::*,
     render::{
         mesh::Indices,
@@ -18,11 +18,9 @@ use isomesh::{
     },
 };
 
-const SAMPLES_PER_CHUNK_DIM: usize = 64; // Number of voxel sample points
-const VOXEL_SIZE: f32 = 1.0; // Size of each voxel in meters
-const CUBES_PER_CHUNK_DIM: usize = SAMPLES_PER_CHUNK_DIM - 1; // 63 cubes
-const CHUNK_SIZE: f32 = CUBES_PER_CHUNK_DIM as f32 * VOXEL_SIZE; // 7.875 meters
-const HALF_CHUNK: f32 = CHUNK_SIZE / 2.0;
+const SAMPLES_PER_CHUNK_DIM: usize = 64;
+const BOUNDING_WIDTH: f32 = 64.0;
+const HALF_EXTENT: f32 = BOUNDING_WIDTH / 2.0;
 
 fn main() {
     App::new()
@@ -35,7 +33,7 @@ fn main() {
                 .into(),
                 ..default()
             }),
-            WireframePlugin,
+            // WireframePlugin,
         ))
         .add_systems(Startup, setup_mdc)
         .run();
@@ -47,11 +45,11 @@ fn setup_mdc(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     //create sphere
-    let sphere_sampler = SphereSampler::new(Vec3::ZERO, 20.0);
+    let sphere_sampler = SphereSampler::new(Vec3::ZERO, HALF_EXTENT);
     let mut mesh_buffers = MeshBuffers::new();
     let densities = sphere_sampler.bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
             SAMPLES_PER_CHUNK_DIM,
             SAMPLES_PER_CHUNK_DIM,
@@ -62,11 +60,9 @@ fn setup_mdc(
         &mut mesh_buffers,
         &densities,
         &[1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM],
-        CUBES_PER_CHUNK_DIM,
         SAMPLES_PER_CHUNK_DIM,
         &NormalColorProvider,
-        HALF_CHUNK,
-        VOXEL_SIZE,
+        HALF_EXTENT,
     );
     let sphere_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((
@@ -75,14 +71,15 @@ fn setup_mdc(
             unlit: true,
             ..default()
         })),
-        Transform::from_xyz(20.0, 0.0, -20.0),
+        Transform::from_xyz(40.0, 0.0, -40.0),
     ));
     //create cuboid
-    let size = Vec3::new(10.0, 15.0, 20.0);
+    //1.1 is for padding so the cuboid fits in the bounding box
+    let size = Vec3::new(HALF_EXTENT / 1.1, HALF_EXTENT / 1.1, HALF_EXTENT / 1.1);
     let cuboid_sampler = CuboidSampler::new(Vec3::ZERO, size);
     let densities = cuboid_sampler.bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
             SAMPLES_PER_CHUNK_DIM,
             SAMPLES_PER_CHUNK_DIM,
@@ -94,11 +91,9 @@ fn setup_mdc(
         &mut mesh_buffers,
         &densities,
         &[1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM],
-        CUBES_PER_CHUNK_DIM,
         SAMPLES_PER_CHUNK_DIM,
         &NormalColorProvider,
-        HALF_CHUNK,
-        VOXEL_SIZE,
+        HALF_EXTENT,
     );
     let cuboid_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((
@@ -107,7 +102,7 @@ fn setup_mdc(
             unlit: true,
             ..default()
         })),
-        Transform::from_xyz(-20.0, 0.0, 20.0),
+        Transform::from_xyz(-40.0, 0.0, 40.0),
     ));
     //light
     commands.spawn((
@@ -119,14 +114,14 @@ fn setup_mdc(
         Transform::from_xyz(40.0, 80.0, 40.0),
     ));
     //wireframe
-    commands.insert_resource(WireframeConfig {
-        global: true,
-        default_color: Color::WHITE,
-    });
+    // commands.insert_resource(WireframeConfig {
+    //     global: true,
+    //     default_color: Color::WHITE,
+    // });
     //camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(60.0, 60.0, 60.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_xyz(90.0, 90.0, 90.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     ));
 }
 

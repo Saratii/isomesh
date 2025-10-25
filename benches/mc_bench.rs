@@ -8,23 +8,24 @@ use isomesh::{
     },
 };
 
-const SAMPLES_PER_CHUNK_DIM: usize = 64; // Number of voxel sample points
-const VOXEL_SIZE: f32 = 1.0; // Size of each voxel in meters
-const CUBES_PER_CHUNK_DIM: usize = SAMPLES_PER_CHUNK_DIM - 1; // 63 cubes
-const CHUNK_SIZE: f32 = CUBES_PER_CHUNK_DIM as f32 * VOXEL_SIZE; // 7.875 meters
-const HALF_CHUNK: f32 = CHUNK_SIZE / 2.0;
+const SAMPLES_PER_CHUNK_DIM_LARGE: usize = 64;
+const SAMPLES_PER_CHUNK_DIM_SMALL: usize = 16;
+const BOUNDING_WIDTH: f32 = 64.0;
+const HALF_EXTENT: f32 = BOUNDING_WIDTH / 2.0;
 
 fn bench_single_sphere_small_normal(c: &mut Criterion) {
-    let densities = SphereSampler::new(Vec3::ZERO, 10.0).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = SphereSampler::new(Vec3::ZERO, HALF_EXTENT).bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL];
     c.bench_function("single_sphere_small_normal", |b| {
         b.iter(|| {
             let mut mesh_buffers = MeshBuffers::new();
@@ -32,11 +33,9 @@ fn bench_single_sphere_small_normal(c: &mut Criterion) {
                 &mut mesh_buffers,
                 &densities,
                 &materials,
-                CUBES_PER_CHUNK_DIM,
-                SAMPLES_PER_CHUNK_DIM,
+                SAMPLES_PER_CHUNK_DIM_SMALL,
                 &NormalColorProvider,
-                HALF_CHUNK,
-                VOXEL_SIZE,
+                HALF_EXTENT,
             );
             black_box(mesh_buffers);
         });
@@ -44,16 +43,18 @@ fn bench_single_sphere_small_normal(c: &mut Criterion) {
 }
 
 fn bench_single_sphere_large_normal(c: &mut Criterion) {
-    let densities = SphereSampler::new(Vec3::ZERO, 30.0).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = SphereSampler::new(Vec3::ZERO, HALF_EXTENT).bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE];
     c.bench_function("single_sphere_large_normal", |b| {
         b.iter(|| {
             let mut mesh_buffers = MeshBuffers::new();
@@ -61,11 +62,9 @@ fn bench_single_sphere_large_normal(c: &mut Criterion) {
                 &mut mesh_buffers,
                 &densities,
                 &materials,
-                CUBES_PER_CHUNK_DIM,
-                SAMPLES_PER_CHUNK_DIM,
+                SAMPLES_PER_CHUNK_DIM_LARGE,
                 &NormalColorProvider,
-                HALF_CHUNK,
-                VOXEL_SIZE,
+                HALF_EXTENT,
             );
             black_box(mesh_buffers);
         });
@@ -73,16 +72,18 @@ fn bench_single_sphere_large_normal(c: &mut Criterion) {
 }
 
 fn bench_bulk_spheres_small_normal(c: &mut Criterion) {
-    let densities = SphereSampler::new(Vec3::ZERO, 10.0).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = SphereSampler::new(Vec3::ZERO, HALF_EXTENT).bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL];
     c.bench_function("bulk_spheres_small_10x_normal", |b| {
         b.iter(|| {
             for _ in 0..100 {
@@ -91,11 +92,9 @@ fn bench_bulk_spheres_small_normal(c: &mut Criterion) {
                     &mut mesh_buffers,
                     &densities,
                     &materials,
-                    CUBES_PER_CHUNK_DIM,
-                    SAMPLES_PER_CHUNK_DIM,
+                    SAMPLES_PER_CHUNK_DIM_SMALL,
                     &NormalColorProvider,
-                    HALF_CHUNK,
-                    VOXEL_SIZE,
+                    HALF_EXTENT,
                 );
                 black_box(mesh_buffers);
             }
@@ -104,16 +103,18 @@ fn bench_bulk_spheres_small_normal(c: &mut Criterion) {
 }
 
 fn bench_bulk_spheres_large_normal(c: &mut Criterion) {
-    let densities = SphereSampler::new(Vec3::ZERO, 30.0).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = SphereSampler::new(Vec3::ZERO, HALF_EXTENT).bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE];
     c.bench_function("bulk_spheres_large_10x_normal", |b| {
         b.iter(|| {
             for _ in 0..100 {
@@ -122,11 +123,9 @@ fn bench_bulk_spheres_large_normal(c: &mut Criterion) {
                     &mut mesh_buffers,
                     &densities,
                     &materials,
-                    CUBES_PER_CHUNK_DIM,
-                    SAMPLES_PER_CHUNK_DIM,
+                    SAMPLES_PER_CHUNK_DIM_LARGE,
                     &NormalColorProvider,
-                    HALF_CHUNK,
-                    VOXEL_SIZE,
+                    HALF_EXTENT,
                 );
                 black_box(mesh_buffers);
             }
@@ -135,16 +134,22 @@ fn bench_bulk_spheres_large_normal(c: &mut Criterion) {
 }
 
 fn bench_single_cube_small_normal(c: &mut Criterion) {
-    let densities = CuboidSampler::new(Vec3::ZERO, Vec3::new(2.0, 4.0, 8.0)).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = CuboidSampler::new(
+        Vec3::ZERO,
+        Vec3::new(HALF_EXTENT / 1.1, HALF_EXTENT / 1.1, HALF_EXTENT / 1.1),
+    )
+    .bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL];
     c.bench_function("single_cube_small_normal", |b| {
         b.iter(|| {
             let mut mesh_buffers = MeshBuffers::new();
@@ -152,11 +157,9 @@ fn bench_single_cube_small_normal(c: &mut Criterion) {
                 &mut mesh_buffers,
                 &densities,
                 &materials,
-                CUBES_PER_CHUNK_DIM,
-                SAMPLES_PER_CHUNK_DIM,
+                SAMPLES_PER_CHUNK_DIM_SMALL,
                 &NormalColorProvider,
-                HALF_CHUNK,
-                VOXEL_SIZE,
+                HALF_EXTENT,
             );
             black_box(mesh_buffers);
         });
@@ -164,16 +167,22 @@ fn bench_single_cube_small_normal(c: &mut Criterion) {
 }
 
 fn bench_single_cube_large_normal(c: &mut Criterion) {
-    let densities = CuboidSampler::new(Vec3::ZERO, Vec3::new(10.0, 15.0, 20.0)).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = CuboidSampler::new(
+        Vec3::ZERO,
+        Vec3::new(HALF_EXTENT / 1.1, HALF_EXTENT / 1.1, HALF_EXTENT / 1.1),
+    )
+    .bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE];
     c.bench_function("single_cube_large_normal", |b| {
         b.iter(|| {
             let mut mesh_buffers = MeshBuffers::new();
@@ -181,11 +190,9 @@ fn bench_single_cube_large_normal(c: &mut Criterion) {
                 &mut mesh_buffers,
                 &densities,
                 &materials,
-                CUBES_PER_CHUNK_DIM,
-                SAMPLES_PER_CHUNK_DIM,
+                SAMPLES_PER_CHUNK_DIM_LARGE,
                 &NormalColorProvider,
-                HALF_CHUNK,
-                VOXEL_SIZE,
+                HALF_EXTENT,
             );
             black_box(mesh_buffers);
         });
@@ -193,16 +200,22 @@ fn bench_single_cube_large_normal(c: &mut Criterion) {
 }
 
 fn bench_bulk_cubes_small_normal(c: &mut Criterion) {
-    let densities = CuboidSampler::new(Vec3::ZERO, Vec3::new(2.0, 4.0, 8.0)).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = CuboidSampler::new(
+        Vec3::ZERO,
+        Vec3::new(HALF_EXTENT / 1.1, HALF_EXTENT / 1.1, HALF_EXTENT / 1.1),
+    )
+    .bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
+            SAMPLES_PER_CHUNK_DIM_SMALL,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL
+        * SAMPLES_PER_CHUNK_DIM_SMALL];
     c.bench_function("bulk_cubes_small_10x_normal", |b| {
         b.iter(|| {
             for _ in 0..100 {
@@ -211,11 +224,9 @@ fn bench_bulk_cubes_small_normal(c: &mut Criterion) {
                     &mut mesh_buffers,
                     &densities,
                     &materials,
-                    CUBES_PER_CHUNK_DIM,
-                    SAMPLES_PER_CHUNK_DIM,
+                    SAMPLES_PER_CHUNK_DIM_SMALL,
                     &NormalColorProvider,
-                    HALF_CHUNK,
-                    VOXEL_SIZE,
+                    HALF_EXTENT,
                 );
                 black_box(mesh_buffers);
             }
@@ -224,16 +235,22 @@ fn bench_bulk_cubes_small_normal(c: &mut Criterion) {
 }
 
 fn bench_bulk_cubes_large_normal(c: &mut Criterion) {
-    let densities = CuboidSampler::new(Vec3::ZERO, Vec3::new(10.0, 15.0, 20.0)).bake_quantized(
-        Vec3::new(-HALF_CHUNK, -HALF_CHUNK, -HALF_CHUNK),
-        Vec3::new(HALF_CHUNK, HALF_CHUNK, HALF_CHUNK),
+    let densities = CuboidSampler::new(
+        Vec3::ZERO,
+        Vec3::new(HALF_EXTENT / 1.1, HALF_EXTENT / 1.1, HALF_EXTENT / 1.1),
+    )
+    .bake_quantized(
+        Vec3::new(-HALF_EXTENT, -HALF_EXTENT, -HALF_EXTENT),
+        Vec3::new(HALF_EXTENT, HALF_EXTENT, HALF_EXTENT),
         (
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
-            SAMPLES_PER_CHUNK_DIM,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
+            SAMPLES_PER_CHUNK_DIM_LARGE,
         ),
     );
-    let materials = [1; SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM * SAMPLES_PER_CHUNK_DIM];
+    let materials = [1; SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE
+        * SAMPLES_PER_CHUNK_DIM_LARGE];
     c.bench_function("bulk_cubes_large_10x_normal", |b| {
         b.iter(|| {
             for _ in 0..100 {
@@ -242,11 +259,9 @@ fn bench_bulk_cubes_large_normal(c: &mut Criterion) {
                     &mut mesh_buffers,
                     &densities,
                     &materials,
-                    CUBES_PER_CHUNK_DIM,
-                    SAMPLES_PER_CHUNK_DIM,
+                    SAMPLES_PER_CHUNK_DIM_LARGE,
                     &NormalColorProvider,
-                    HALF_CHUNK,
-                    VOXEL_SIZE,
+                    HALF_EXTENT,
                 );
                 black_box(mesh_buffers);
             }
