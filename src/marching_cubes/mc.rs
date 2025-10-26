@@ -311,10 +311,11 @@ fn get_or_create_edge_vertex(
     voxel_size: f32,
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
+    let position = interpolate_edge(edge_index, vertices, values);
     let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
     let val1 = values[v1_idx];
-    let position = interpolate_edge(edge_index, vertices, values);
-    let solid_corner = if val1 < 0.0 { v1_idx } else { v2_idx };
+    let val2 = values[v2_idx];
+    let solid_corner = if val1 > val2 { v1_idx } else { v2_idx };
     let normal = calculate_vertex_normal(
         position,
         densities,
