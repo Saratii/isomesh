@@ -7,7 +7,6 @@ use crate::marching_cubes::tables::{EDGE_VERTICES, TRIANGLE_TABLE};
 pub struct MeshBuffers {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
-    pub colors: Vec<[f32; 4]>,
     pub indices: Vec<u32>,
     pub uvs: Vec<[f32; 2]>,
 }
@@ -17,7 +16,6 @@ impl MeshBuffers {
         Self {
             positions: Vec::new(),
             normals: Vec::new(),
-            colors: Vec::new(),
             indices: Vec::new(),
             uvs: Vec::new(),
         }
