@@ -73,6 +73,37 @@ impl VertexCache {
     }
 }
 
+fn voxel_data_from_index(
+    cube_x: usize,
+    cube_y: usize,
+    cube_z: usize,
+    corner: usize,
+    materials: &[u8],
+    samples_per_chunk_dim: usize,
+    position: Vec3,
+    color_provider: &dyn ColorProvider,
+) -> ([f32; 4], u8) {
+    let (dx, dy, dz) = match corner {
+        0 => (0, 0, 0),
+        1 => (1, 0, 0),
+        2 => (1, 1, 0),
+        3 => (0, 1, 0),
+        4 => (0, 0, 1),
+        5 => (1, 0, 1),
+        6 => (1, 1, 1),
+        7 => (0, 1, 1),
+        _ => (0, 0, 0),
+    };
+    let x = cube_x + dx;
+    let y = cube_y + dy;
+    let z = cube_z + dz;
+    let idx = z * samples_per_chunk_dim * samples_per_chunk_dim + y * samples_per_chunk_dim + x;
+    let material = materials[idx];
+    let color = color_provider.get_color(material, position);
+
+    (color, material)
+}
+
 pub fn mc_mesh_generation(
     mesh_buffers: &mut MeshBuffers,
     densities: &[i16],
@@ -281,6 +312,10 @@ fn get_or_create_edge_vertex(
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
     let position = interpolate_edge(edge_index, vertices, values);
+    let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
+    let val1 = values[v1_idx];
+    let val2 = values[v2_idx];
+    let solid_corner = if val1 > val2 { v1_idx } else { v2_idx };
     let normal = calculate_vertex_normal(
         position,
         densities,
@@ -288,14 +323,16 @@ fn get_or_create_edge_vertex(
         half_extent,
         voxel_size,
     );
-    let material = sample_material_at_position(
-        position,
+    let (mut color, material) = voxel_data_from_index(
+        cube_x,
+        cube_y,
+        cube_z,
+        solid_corner,
         materials,
         samples_per_chunk_dim,
-        half_extent,
-        voxel_size,
+        position,
+        color_provider,
     );
-    let mut color = color_provider.get_color(material, position);
     if !color_provider.needs_material() && color == [1.0, 1.0, 1.0, 1.0] {
         color = normal_to_color(normal);
     }
@@ -567,26 +604,4 @@ fn build_mesh_buffers_from_cache_and_indices(
 
 fn encode_material_to_uv(material: u8) -> [f32; 2] {
     [material as f32, 0.0]
-}
-
-fn sample_material_at_position(
-    point: Vec3,
-    materials: &[u8],
-    samples_per_chunk_dim: usize,
-    half_extent: f32,
-    voxel_size: f32,
-) -> u8 {
-    let voxel_x = ((point.x + half_extent) / voxel_size)
-        .round()
-        .clamp(0.0, (samples_per_chunk_dim - 1) as f32) as usize;
-    let voxel_y = ((point.y + half_extent) / voxel_size)
-        .round()
-        .clamp(0.0, (samples_per_chunk_dim - 1) as f32) as usize;
-    let voxel_z = ((point.z + half_extent) / voxel_size)
-        .round()
-        .clamp(0.0, (samples_per_chunk_dim - 1) as f32) as usize;
-    let idx = voxel_z * samples_per_chunk_dim * samples_per_chunk_dim
-        + voxel_y * samples_per_chunk_dim
-        + voxel_x;
-    materials[idx]
 }
