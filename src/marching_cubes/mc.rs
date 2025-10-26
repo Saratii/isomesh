@@ -2,10 +2,7 @@ use std::collections::HashMap;
 
 use glam::Vec3;
 
-use crate::marching_cubes::{
-    color_provider::{ColorProvider, normal_to_color},
-    tables::{EDGE_VERTICES, TRIANGLE_TABLE},
-};
+use crate::marching_cubes::tables::{EDGE_VERTICES, TRIANGLE_TABLE};
 
 pub struct MeshBuffers {
     pub positions: Vec<[f32; 3]>,
@@ -38,7 +35,6 @@ struct EdgeId {
 struct VertexCache {
     edge_to_vertex: HashMap<EdgeId, u32>,
     vertices: Vec<Vec3>,
-    colors: Vec<[f32; 4]>,
     uvs: Vec<[f32; 2]>,
 }
 
@@ -47,25 +43,17 @@ impl VertexCache {
         Self {
             edge_to_vertex: HashMap::new(),
             vertices: Vec::new(),
-            colors: Vec::new(),
             uvs: Vec::new(),
         }
     }
 
-    fn get_or_create_vertex(
-        &mut self,
-        edge_id: EdgeId,
-        position: Vec3,
-        color: [f32; 4],
-        material: u8,
-    ) -> u32 {
+    fn get_or_create_vertex(&mut self, edge_id: EdgeId, position: Vec3, material: u8) -> u32 {
         if let Some(&vertex_index) = self.edge_to_vertex.get(&edge_id) {
             vertex_index
         } else {
             let vertex_index = self.vertices.len() as u32;
             let uv = encode_material_to_uv(material);
             self.vertices.push(position);
-            self.colors.push(color);
             self.uvs.push(uv);
             self.edge_to_vertex.insert(edge_id, vertex_index);
             vertex_index
@@ -80,9 +68,7 @@ fn voxel_data_from_index(
     corner: usize,
     materials: &[u8],
     samples_per_chunk_dim: usize,
-    position: Vec3,
-    color_provider: &dyn ColorProvider,
-) -> ([f32; 4], u8) {
+) -> u8 {
     let (dx, dy, dz) = match corner {
         0 => (0, 0, 0),
         1 => (1, 0, 0),
@@ -99,9 +85,7 @@ fn voxel_data_from_index(
     let z = cube_z + dz;
     let idx = z * samples_per_chunk_dim * samples_per_chunk_dim + y * samples_per_chunk_dim + x;
     let material = materials[idx];
-    let color = color_provider.get_color(material, position);
-
-    (color, material)
+    material
 }
 
 pub fn mc_mesh_generation(
@@ -109,7 +93,6 @@ pub fn mc_mesh_generation(
     densities: &[i16],
     materials: &[u8],
     samples_per_chunk_dim: usize,
-    color_provider: &dyn ColorProvider,
     half_extent: f32,
 ) {
     let cubes_per_chunk_dim = samples_per_chunk_dim - 1;
@@ -128,7 +111,6 @@ pub fn mc_mesh_generation(
                     densities,
                     materials,
                     samples_per_chunk_dim,
-                    color_provider,
                     half_extent,
                     voxel_size,
                 );
@@ -143,7 +125,6 @@ pub fn mc_mesh_generation(
         samples_per_chunk_dim,
         half_extent,
         voxel_size,
-        color_provider,
     );
 }
 
@@ -187,7 +168,6 @@ fn process_cube_with_cache(
     densities: &[i16],
     materials: &[u8],
     samples_per_chunk_dim: usize,
-    color_provider: &dyn ColorProvider,
     half_extent: f32,
     voxel_size: f32,
 ) {
@@ -207,10 +187,6 @@ fn process_cube_with_cache(
         vertex_cache,
         materials,
         samples_per_chunk_dim,
-        color_provider,
-        densities,
-        half_extent,
-        voxel_size,
     );
     for triangle in triangles {
         indices.extend_from_slice(&triangle);
@@ -231,10 +207,6 @@ fn triangulate_cube_with_cache(
     vertex_cache: &mut VertexCache,
     materials: &[u8],
     samples_per_chunk_dim: usize,
-    color_provider: &dyn ColorProvider,
-    densities: &[i16],
-    half_extent: f32,
-    voxel_size: f32,
 ) -> Vec<[u32; 3]> {
     let edge_table = get_edge_table_for_cube(cube_index);
     let mut result = Vec::new();
@@ -251,10 +223,6 @@ fn triangulate_cube_with_cache(
                 vertex_cache,
                 materials,
                 samples_per_chunk_dim,
-                color_provider,
-                densities,
-                half_extent,
-                voxel_size,
             );
             let v2 = get_or_create_edge_vertex(
                 edge_table[i + 1] as usize,
@@ -266,10 +234,6 @@ fn triangulate_cube_with_cache(
                 vertex_cache,
                 materials,
                 samples_per_chunk_dim,
-                color_provider,
-                densities,
-                half_extent,
-                voxel_size,
             );
             let v3 = get_or_create_edge_vertex(
                 edge_table[i + 2] as usize,
@@ -281,10 +245,6 @@ fn triangulate_cube_with_cache(
                 vertex_cache,
                 materials,
                 samples_per_chunk_dim,
-                color_provider,
-                densities,
-                half_extent,
-                voxel_size,
             );
             result.push([v1, v2, v3]);
             i += 3;
@@ -305,37 +265,21 @@ fn get_or_create_edge_vertex(
     vertex_cache: &mut VertexCache,
     materials: &[u8],
     samples_per_chunk_dim: usize,
-    color_provider: &dyn ColorProvider,
-    densities: &[i16],
-    half_extent: f32,
-    voxel_size: f32,
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
     let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
     let val1 = values[v1_idx];
     let position = interpolate_edge(edge_index, vertices, values);
     let solid_corner = if val1 < 0.0 { v1_idx } else { v2_idx };
-    let normal = calculate_vertex_normal(
-        position,
-        densities,
-        samples_per_chunk_dim,
-        half_extent,
-        voxel_size,
-    );
-    let (mut color, material) = voxel_data_from_index(
+    let material = voxel_data_from_index(
         cube_x,
         cube_y,
         cube_z,
         solid_corner,
         materials,
         samples_per_chunk_dim,
-        position,
-        color_provider,
     );
-    if !color_provider.needs_material() && color == [1.0, 1.0, 1.0, 1.0] {
-        color = normal_to_color(normal);
-    }
-    vertex_cache.get_or_create_vertex(edge_id, position, color, material)
+    vertex_cache.get_or_create_vertex(edge_id, position, material)
 }
 
 fn get_canonical_edge_id(edge_index: usize, cube_x: usize, cube_y: usize, cube_z: usize) -> EdgeId {
@@ -559,7 +503,6 @@ fn build_mesh_buffers_from_cache_and_indices(
     samples_per_chunk_dim: usize,
     half_extent: f32,
     voxel_size: f32,
-    color_provider: &dyn ColorProvider,
 ) {
     if vertex_cache.vertices.is_empty() {
         return;
@@ -583,20 +526,8 @@ fn build_mesh_buffers_from_cache_and_indices(
             .into()
         })
         .collect();
-    let colors = if color_provider.uses_normals() {
-        normals
-            .iter()
-            .map(|n| {
-                let normal = Vec3::from_array(*n);
-                normal_to_color(normal)
-            })
-            .collect()
-    } else {
-        vertex_cache.colors
-    };
     mesh_buffers.positions = positions;
     mesh_buffers.normals = normals;
-    mesh_buffers.colors = colors;
     mesh_buffers.indices = indices;
     mesh_buffers.uvs = vertex_cache.uvs;
 }
