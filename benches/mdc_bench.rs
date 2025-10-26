@@ -16,7 +16,7 @@ fn bench_single_sphere_small(c: &mut Criterion) {
                 resolution,
                 40.0,
                 true,
-                sphere,
+                &sphere,
             );
         });
     });
@@ -35,7 +35,7 @@ fn bench_single_sphere_large(c: &mut Criterion) {
                 resolution,
                 40.0,
                 true,
-                sphere,
+                &sphere,
             );
         });
     });
@@ -55,7 +55,7 @@ fn bench_bulk_spheres_small(c: &mut Criterion) {
                     resolution,
                     40.0,
                     true,
-                    sphere,
+                    &sphere,
                 );
             }
         });
@@ -76,7 +76,7 @@ fn bench_bulk_spheres_large(c: &mut Criterion) {
                     resolution,
                     40.0,
                     true,
-                    sphere,
+                    &sphere,
                 );
                 black_box(mesh_buffers);
             }
@@ -91,7 +91,7 @@ fn bench_single_cube_small(c: &mut Criterion) {
         b.iter(|| {
             let cube = CuboidSampler::new(Vec3::ZERO, size);
             let mut mesh_buffers = MeshBuffers::new();
-            mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, cube);
+            mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, &cube);
             black_box(mesh_buffers);
         });
     });
@@ -104,7 +104,7 @@ fn bench_single_cube_large(c: &mut Criterion) {
         b.iter(|| {
             let cube = CuboidSampler::new(Vec3::ZERO, size);
             let mut mesh_buffers = MeshBuffers::new();
-            mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, cube);
+            mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, &cube);
             black_box(mesh_buffers);
         });
     });
@@ -118,7 +118,7 @@ fn bench_bulk_cubes_small(c: &mut Criterion) {
             for _ in 0..100 {
                 let cube = CuboidSampler::new(Vec3::ZERO, size);
                 let mut mesh_buffers = MeshBuffers::new();
-                mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, cube);
+                mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, &cube);
                 black_box(mesh_buffers);
             }
         });
@@ -133,7 +133,7 @@ fn bench_bulk_cubes_large(c: &mut Criterion) {
             for _ in 0..100 {
                 let cube = CuboidSampler::new(Vec3::ZERO, size);
                 let mut mesh_buffers = MeshBuffers::new();
-                mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, cube);
+                mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, 40.0, true, &cube);
                 black_box(mesh_buffers);
             }
         });
