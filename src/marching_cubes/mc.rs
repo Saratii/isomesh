@@ -30,16 +30,8 @@ struct EdgeId {
     direction: u8,
 }
 
-// composite key: edge + material to avoid sharing vertices across material seams
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct EdgeKey {
-    edge: EdgeId,
-    material: u8,
-}
-
 struct VertexCache {
-    // key is now EdgeKey (edge + material)
-    edge_to_vertex: HashMap<EdgeKey, u32>,
+    edge_to_vertex: HashMap<EdgeId, u32>,
     vertices: Vec<Vec3>,
     uvs: Vec<[f32; 2]>,
 }
@@ -54,18 +46,14 @@ impl VertexCache {
     }
 
     fn get_or_create_vertex(&mut self, edge_id: EdgeId, position: Vec3, material: u8) -> u32 {
-        let key = EdgeKey {
-            edge: edge_id,
-            material,
-        };
-        if let Some(&vertex_index) = self.edge_to_vertex.get(&key) {
+        if let Some(&vertex_index) = self.edge_to_vertex.get(&edge_id) {
             vertex_index
         } else {
             let vertex_index = self.vertices.len() as u32;
             let uv = encode_material_to_uv(material);
             self.vertices.push(position);
             self.uvs.push(uv);
-            self.edge_to_vertex.insert(key, vertex_index);
+            self.edge_to_vertex.insert(edge_id, vertex_index);
             vertex_index
         }
     }
@@ -278,10 +266,7 @@ fn get_or_create_edge_vertex(
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
     let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
-    // position on the edge exactly where the iso is
     let position = interpolate_edge(edge_index, vertices, values);
-
-    // endpoint materials
     let material1 = voxel_data_from_index(
         cube_x,
         cube_y,
@@ -299,31 +284,15 @@ fn get_or_create_edge_vertex(
         samples_per_chunk_dim,
     );
 
-    // endpoint sdf values (these are the same units you're using elsewhere)
-    let val1 = values[v1_idx];
-    let val2 = values[v2_idx];
-
-    // If both endpoints already agree on material -> use it (fast path)
-    if material1 == material2 {
-        return vertex_cache.get_or_create_vertex(edge_id, position, material1);
-    }
-
-    // If either endpoint is grass (2) prefer it immediately (preserve your rule)
-    if material1 == 2 || material2 == 2 {
-        return vertex_cache.get_or_create_vertex(edge_id, position, 2);
-    }
-
-    // Compute interpolation parameter t (0..1) exactly as in interpolate_edge
-    let t = if (val2 - val1).abs() < 0.0001 {
-        0.5
+    let material = if material1 == 2 || material2 == 2 {
+        2
+    } else if material1 != 0 {
+        material1
     } else {
-        ((0.0 - val1) / (val2 - val1)).clamp(0.0, 1.0)
+        material2
     };
 
-    // Choose the endpoint material that is closer to the actual vertex (by t)
-    let chosen_material = if t < 0.5 { material1 } else { material2 };
-
-    vertex_cache.get_or_create_vertex(edge_id, position, chosen_material)
+    vertex_cache.get_or_create_vertex(edge_id, position, material)
 }
 
 fn get_canonical_edge_id(edge_index: usize, cube_x: usize, cube_y: usize, cube_z: usize) -> EdgeId {
