@@ -63,7 +63,7 @@ impl VertexCache {
             vertex_index
         } else {
             let vertex_index = self.vertices.len() as u32;
-            let uv = generate_uv_coordinates(position, material);
+            let uv = encode_material_to_uv(material);
             self.vertices.push(position);
             self.colors.push(color);
             self.uvs.push(uv);
@@ -573,8 +573,14 @@ fn build_mesh_buffers_from_cache_and_indices(
         .vertices
         .iter()
         .map(|v| {
-            calculate_vertex_normal(*v, densities, samples_per_chunk_dim, half_extent, voxel_size)
-                .into()
+            calculate_vertex_normal(
+                *v,
+                densities,
+                samples_per_chunk_dim,
+                half_extent,
+                voxel_size,
+            )
+            .into()
         })
         .collect();
     let colors = if color_provider.uses_normals() {
@@ -598,13 +604,6 @@ fn build_mesh_buffers_from_cache_and_indices(
 fn wrap01(v: f32) -> f32 {
     ((v % 1.0) + 1.0) % 1.0
 }
-
-fn generate_uv_coordinates(position: Vec3, material: u8) -> [f32; 2] {
-    let scale = 0.1;
-    let base_uv = [wrap01(position.x * scale), wrap01(position.z * scale)];
-    match material {
-        1 => [base_uv[0] * 0.5, base_uv[1]],       // dirt: left half
-        2 => [0.5 + base_uv[0] * 0.5, base_uv[1]], // grass: right half
-        _ => base_uv,
-    }
+fn encode_material_to_uv(material: u8) -> [f32; 2] {
+    [material as f32, 0.0]
 }
