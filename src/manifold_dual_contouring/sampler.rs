@@ -237,3 +237,9 @@ pub fn quantize_f32_to_i16(value: f32) -> i16 {
     let scale = 32767.0 / 10.0; // Map [-10, 10] to [-32767, 32767]
     (value * scale).round() as i16
 }
+
+impl<S: Sampler + ?Sized> Sampler for &S {
+    fn sample(&self, point: Vec3) -> f32 {
+        (*self).sample(point)
+    }
+}

@@ -48,7 +48,7 @@ fn setup_mdc(
         resolution,
         40.0,
         true,
-        sphere_sampler,
+        &sphere_sampler,
     );
     let sphere_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((
@@ -71,7 +71,7 @@ fn setup_mdc(
         resolution,
         40.0,
         true,
-        cuboid_sampler,
+        &cuboid_sampler,
     );
     let cuboid_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((

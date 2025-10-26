@@ -42,7 +42,7 @@ pub fn mdc_mesh_generation<S: Sampler + Send + Sync + 'static>(
     resolution: i32,
     bounding_width: f32,
     enforce_manifold: bool,
-    sampler: S,
+    sampler: &S,
 ) {
     ENFORCE_MANIFOLD.store(enforce_manifold, Ordering::Relaxed);
     let mut tree = Box::new(OctreeNode::new());
@@ -183,7 +183,7 @@ mod tests {
             resolution,
             bounding_width,
             true,
-            sphere,
+            &sphere,
         );
         // Test positions
         assert_eq!(mesh_buffers.positions.len(), EXPECTED_POSITIONS.len());

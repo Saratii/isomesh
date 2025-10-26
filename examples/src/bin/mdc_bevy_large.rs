@@ -47,7 +47,7 @@ fn setup_mdc(
         resolution,
         400.0,
         true,
-        fun_blob,
+        &fun_blob,
     );
     let sphere_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((

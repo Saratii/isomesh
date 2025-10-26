@@ -145,7 +145,7 @@ impl OctreeNode {
         resolution: i32,
         bounding_width: f32,
         mesh_buffers: &mut MeshBuffers,
-        sampler: Arc<S>,
+        sampler: Arc<&S>,
     ) {
         self.index = 0;
         self.position = Vec3::splat(-bounding_width * 0.5);
@@ -197,7 +197,7 @@ impl OctreeNode {
         mesh_buffers: &mut MeshBuffers,
         n_index: &mut i32,
         threaded: i32,
-        sampler: &Arc<S>,
+        sampler: &Arc<&S>,
     ) -> bool {
         if self.size == 1 {
             return self.construct_leaf(n_index, sampler);
@@ -259,7 +259,7 @@ impl OctreeNode {
         has_children
     }
 
-    fn construct_leaf<S: Sampler>(&mut self, index: &mut i32, sampler: &Arc<S>) -> bool {
+    fn construct_leaf<S: Sampler>(&mut self, index: &mut i32, sampler: &Arc<&S>) -> bool {
         if self.size != 1 {
             return false;
         }
