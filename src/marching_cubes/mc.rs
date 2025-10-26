@@ -315,7 +315,13 @@ fn get_or_create_edge_vertex(
     let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
     let val1 = values[v1_idx];
     let val2 = values[v2_idx];
-    let solid_corner = if val1 > val2 { v1_idx } else { v2_idx };
+    let solid_corner = if val1 < 0.0 && val2 < 0.0 {
+        if val1 > val2 { v1_idx } else { v2_idx }
+    } else if val1 < 0.0 {
+        v1_idx
+    } else {
+        v2_idx
+    };
     let normal = calculate_vertex_normal(
         position,
         densities,
