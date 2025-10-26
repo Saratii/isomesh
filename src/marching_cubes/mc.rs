@@ -265,33 +265,25 @@ fn get_or_create_edge_vertex(
     samples_per_chunk_dim: usize,
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
-    let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
     let position = interpolate_edge(edge_index, vertices, values);
-    let material1 = voxel_data_from_index(
-        cube_x,
-        cube_y,
-        cube_z,
-        v1_idx,
-        materials,
-        samples_per_chunk_dim,
-    );
-    let material2 = voxel_data_from_index(
-        cube_x,
-        cube_y,
-        cube_z,
-        v2_idx,
-        materials,
-        samples_per_chunk_dim,
-    );
-    //prioritize grass cause it wont work without it
-    let material = if material1 == 2 || material2 == 2 {
-        2
-    } else if material1 != 0 {
-        material1
+    let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
+    let val1 = values[v1_idx];
+    let val2 = values[v2_idx];
+    let t = if (val2 - val1).abs() < 0.0001 {
+        0.5
     } else {
-        material2
+        ((0.0 - val1) / (val2 - val1)).clamp(0.0, 1.0)
     };
-
+    let interpolated_sdf = val1 + t * (val2 - val1);
+    let material = if interpolated_sdf < 0.0 {
+        if interpolated_sdf < -1.5 * (32767.0 / 10.0) {
+            1
+        } else {
+            2
+        }
+    } else {
+        0
+    };
     vertex_cache.get_or_create_vertex(edge_id, position, material)
 }
 
