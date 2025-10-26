@@ -601,9 +601,6 @@ fn build_mesh_buffers_from_cache_and_indices(
     mesh_buffers.uvs = vertex_cache.uvs;
 }
 
-fn wrap01(v: f32) -> f32 {
-    ((v % 1.0) + 1.0) % 1.0
-}
 fn encode_material_to_uv(material: u8) -> [f32; 2] {
     [material as f32, 0.0]
 }

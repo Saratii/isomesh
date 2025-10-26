@@ -40,12 +40,13 @@ pub fn mdc_mesh_generation<S: Sampler + Send + Sync + 'static>(
     mesh_buffers: &mut MeshBuffers,
     flat_shading: bool,
     resolution: i32,
+    bounding_width: f32,
     enforce_manifold: bool,
     sampler: S,
 ) {
     ENFORCE_MANIFOLD.store(enforce_manifold, Ordering::Relaxed);
     let mut tree = Box::new(OctreeNode::new());
-    tree.construct_base(resolution, mesh_buffers, Arc::new(sampler));
+    tree.construct_base(resolution, bounding_width, mesh_buffers, Arc::new(sampler));
     tree.cluster_cell_base(0.0);
     tree.generate_vertex_buffer(mesh_buffers);
     calculate_indexes(&tree, threshold, mesh_buffers, flat_shading);
@@ -171,10 +172,19 @@ mod tests {
 
     #[test]
     fn test_mdc_sphere_no_flat_shading() {
-        let resolution = 16;
+        let resolution = 32;
+        let bounding_width = 40.0;
         let mut mesh_buffers = MeshBuffers::new();
-        let sphere = SphereSampler::new(Vec3::new(0.0, 0.0, 0.0), 5.0);
-        mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, sphere);
+        let sphere = SphereSampler::new(Vec3::new(0.0, 0.0, 0.0), 20.0);
+        mdc_mesh_generation(
+            0.5,
+            &mut mesh_buffers,
+            false,
+            resolution,
+            bounding_width,
+            true,
+            sphere,
+        );
         // Test positions
         assert_eq!(mesh_buffers.positions.len(), EXPECTED_POSITIONS.len());
         for (i, expected_pos) in EXPECTED_POSITIONS.iter().enumerate() {

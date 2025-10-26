@@ -1,4 +1,4 @@
-pub(crate) mod file_io;
+pub mod file_io;
 pub(crate) mod mat3;
 pub mod mdc;
 pub(crate) mod octree;

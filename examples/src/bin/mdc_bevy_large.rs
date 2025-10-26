@@ -1,5 +1,3 @@
-use std::process::exit;
-
 use bevy::{
     pbr::wireframe::{WireframeConfig, WireframePlugin},
     prelude::*,
@@ -39,11 +37,18 @@ fn setup_mdc(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    //create sphere
-    let resolution = 512;
+    let resolution = 256;
     let fun_blob = FunSurfaceSampler::new(Vec3::new(0.0, 0.0, 0.0), 40.0);
     let mut mesh_buffers = MeshBuffers::new();
-    mdc_mesh_generation(0.5, &mut mesh_buffers, false, resolution, true, fun_blob);
+    mdc_mesh_generation(
+        0.5,
+        &mut mesh_buffers,
+        false,
+        resolution,
+        400.0,
+        true,
+        fun_blob,
+    );
     let sphere_mesh = generate_bevy_mesh(mesh_buffers);
     commands.spawn((
         Mesh3d(meshes.add(sphere_mesh)),
@@ -72,7 +77,6 @@ fn setup_mdc(
         Camera3d::default(),
         Transform::from_xyz(130.0, 80.0, 130.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     ));
-    exit(0);
 }
 
 pub fn generate_bevy_mesh(mesh_buffers: MeshBuffers) -> Mesh {

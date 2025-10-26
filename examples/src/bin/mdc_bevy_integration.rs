@@ -38,7 +38,7 @@ fn setup_mdc(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     //create sphere
-    let resolution = 64;
+    let resolution = 32;
     let sphere_sampler = SphereSampler::new(Vec3::new(0.0, 0.0, 0.0), 20.0);
     let mut mesh_buffers = MeshBuffers::new();
     mdc_mesh_generation(
@@ -46,6 +46,7 @@ fn setup_mdc(
         &mut mesh_buffers,
         false,
         resolution,
+        40.0,
         true,
         sphere_sampler,
     );
@@ -68,6 +69,7 @@ fn setup_mdc(
         &mut mesh_buffers,
         false,
         resolution,
+        40.0,
         true,
         cuboid_sampler,
     );

@@ -96,6 +96,7 @@ pub(crate) struct OctreeNode {
     pub(crate) index: i32,
     pub(crate) position: Vec3,
     pub(crate) size: i32,
+    pub(crate) voxel_size: f32,
     pub(crate) children: [Option<Box<OctreeNode>>; 8],
     pub(crate) node_type: NodeType,
     pub(crate) vertices: Vec<Arc<Mutex<Vertex>>>,
@@ -111,6 +112,7 @@ impl OctreeNode {
             index: 0,
             position: Vec3::ZERO,
             size: 0,
+            voxel_size: 0.0,
             children: [None, None, None, None, None, None, None, None],
             node_type: NodeType::None,
             vertices: Vec::new(),
@@ -119,11 +121,17 @@ impl OctreeNode {
         }
     }
 
-    pub(crate) fn with_params(position: Vec3, size: i32, node_type: NodeType) -> Self {
+    pub(crate) fn with_params(
+        position: Vec3,
+        size: i32,
+        voxel_size: f32,
+        node_type: NodeType,
+    ) -> Self {
         OctreeNode {
             index: 0,
             position,
             size,
+            voxel_size,
             children: [None, None, None, None, None, None, None, None],
             node_type,
             vertices: Vec::new(),
@@ -134,13 +142,16 @@ impl OctreeNode {
 
     pub(crate) fn construct_base<S: Sampler + Send + Sync + 'static>(
         &mut self,
-        size: i32,
+        resolution: i32,
+        bounding_width: f32,
         mesh_buffers: &mut MeshBuffers,
         sampler: Arc<S>,
     ) {
         self.index = 0;
-        self.position = Vec3::splat(-(size as f32) * 0.5);
-        self.size = size;
+        self.position = Vec3::splat(-bounding_width * 0.5);
+        let cell_size = bounding_width / resolution as f32;
+        self.size = resolution;
+        self.voxel_size = cell_size;
         self.node_type = NodeType::Internal;
         self.children = [None, None, None, None, None, None, None, None];
         self.vertices = Vec::new();
@@ -193,6 +204,7 @@ impl OctreeNode {
         }
         self.node_type = NodeType::Internal;
         let child_size = self.size / 2;
+        let child_cell_size = self.voxel_size;
         let mut has_children = false;
         if threaded > 0 && self.size > 2 {
             let results: Vec<_> = (0..8)
@@ -204,8 +216,9 @@ impl OctreeNode {
                         let mut temp_buffers = MeshBuffers::default();
                         let child_pos = T_CORNER_DELTAS[i];
                         let mut child = Box::new(OctreeNode::with_params(
-                            self.position + child_pos * child_size as f32,
+                            self.position + child_pos * (child_size as f32 * child_cell_size),
                             child_size,
+                            child_cell_size,
                             NodeType::Internal,
                         ));
                         child.child_index = i as i32;
@@ -231,8 +244,9 @@ impl OctreeNode {
                 *n_index += 1;
                 let child_pos = T_CORNER_DELTAS[i];
                 let mut child = Box::new(OctreeNode::with_params(
-                    self.position + child_pos * child_size as f32,
+                    self.position + child_pos * (child_size as f32 * child_cell_size),
                     child_size,
+                    child_cell_size,
                     NodeType::Internal,
                 ));
                 child.child_index = i as i32;
@@ -255,7 +269,8 @@ impl OctreeNode {
         let mut corners = 0;
         let mut samples = [0.0; 8];
         for i in 0..8 {
-            samples[i] = sampler.sample(self.position + T_CORNER_DELTAS[i]);
+            let world_pos = self.position + T_CORNER_DELTAS[i] * self.voxel_size;
+            samples[i] = sampler.sample(world_pos);
             if samples[i] < 0.0 {
                 corners |= 1 << i;
             }
@@ -287,14 +302,14 @@ impl OctreeNode {
             let mut k = 0;
             let mut vertex = Vertex::new();
             let mut normal = Vec3::ZERO;
-            let mut ei = [0i32; 12];
+            let mut ei = [0; 12];
             while v_edges[i][k] != -1 {
                 let edge = v_edges[i][k] as usize;
                 ei[edge] = 1;
                 let a = self.position
-                    + T_CORNER_DELTAS[T_EDGE_PAIRS[edge][0] as usize] * self.size as f32;
+                    + T_CORNER_DELTAS[T_EDGE_PAIRS[edge][0] as usize] * self.voxel_size;
                 let b = self.position
-                    + T_CORNER_DELTAS[T_EDGE_PAIRS[edge][1] as usize] * self.size as f32;
+                    + T_CORNER_DELTAS[T_EDGE_PAIRS[edge][1] as usize] * self.voxel_size;
                 let intersection = get_intersection(
                     a,
                     b,
