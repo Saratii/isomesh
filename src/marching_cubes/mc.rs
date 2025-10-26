@@ -30,8 +30,16 @@ struct EdgeId {
     direction: u8,
 }
 
+// composite key: edge + material to avoid sharing vertices across material seams
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct EdgeKey {
+    edge: EdgeId,
+    material: u8,
+}
+
 struct VertexCache {
-    edge_to_vertex: HashMap<EdgeId, u32>,
+    // key is now EdgeKey (edge + material)
+    edge_to_vertex: HashMap<EdgeKey, u32>,
     vertices: Vec<Vec3>,
     uvs: Vec<[f32; 2]>,
 }
@@ -46,14 +54,18 @@ impl VertexCache {
     }
 
     fn get_or_create_vertex(&mut self, edge_id: EdgeId, position: Vec3, material: u8) -> u32 {
-        if let Some(&vertex_index) = self.edge_to_vertex.get(&edge_id) {
+        let key = EdgeKey {
+            edge: edge_id,
+            material,
+        };
+        if let Some(&vertex_index) = self.edge_to_vertex.get(&key) {
             vertex_index
         } else {
             let vertex_index = self.vertices.len() as u32;
             let uv = encode_material_to_uv(material);
             self.vertices.push(position);
             self.uvs.push(uv);
-            self.edge_to_vertex.insert(edge_id, vertex_index);
+            self.edge_to_vertex.insert(key, vertex_index);
             vertex_index
         }
     }
