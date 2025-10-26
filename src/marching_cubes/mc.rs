@@ -278,6 +278,7 @@ fn get_or_create_edge_vertex(
 ) -> u32 {
     let edge_id = get_canonical_edge_id(edge_index, cube_x, cube_y, cube_z);
     let (v1_idx, v2_idx) = EDGE_VERTICES[edge_index];
+    // position on the edge exactly where the iso is
     let position = interpolate_edge(edge_index, vertices, values);
 
     // endpoint materials
@@ -298,41 +299,29 @@ fn get_or_create_edge_vertex(
         samples_per_chunk_dim,
     );
 
-    // endpoint sdf values (note: these are quantized i16->f32 values as you already use)
+    // endpoint sdf values (these are the same units you're using elsewhere)
     let val1 = values[v1_idx];
     let val2 = values[v2_idx];
 
-    // 1) If either endpoint is grass, prefer grass immediately (preserve your rule)
+    // If both endpoints already agree on material -> use it (fast path)
+    if material1 == material2 {
+        return vertex_cache.get_or_create_vertex(edge_id, position, material1);
+    }
+
+    // If either endpoint is grass (2) prefer it immediately (preserve your rule)
     if material1 == 2 || material2 == 2 {
         return vertex_cache.get_or_create_vertex(edge_id, position, 2);
     }
 
-    // 2) Determine which endpoints are "inside" (negative sdf)
-    let inside1 = val1 < 0.0;
-    let inside2 = val2 < 0.0;
-
-    let chosen_material = if inside1 && !inside2 {
-        // only v1 is inside -> use v1's material
-        material1
-    } else if inside2 && !inside1 {
-        // only v2 is inside -> use v2's material
-        material2
-    } else if inside1 && inside2 {
-        // both inside -> prefer the one closer to the iso (smaller abs(sdf))
-        if val1.abs() <= val2.abs() {
-            material1
-        } else {
-            material2
-        }
+    // Compute interpolation parameter t (0..1) exactly as in interpolate_edge
+    let t = if (val2 - val1).abs() < 0.0001 {
+        0.5
     } else {
-        // neither inside (edge crosses in an unexpected way) -> choose by interpolation t
-        let t = if (val2 - val1).abs() < 0.0001 {
-            0.5
-        } else {
-            ((0.0 - val1) / (val2 - val1)).clamp(0.0, 1.0)
-        };
-        if t < 0.5 { material1 } else { material2 }
+        ((0.0 - val1) / (val2 - val1)).clamp(0.0, 1.0)
     };
+
+    // Choose the endpoint material that is closer to the actual vertex (by t)
+    let chosen_material = if t < 0.5 { material1 } else { material2 };
 
     vertex_cache.get_or_create_vertex(edge_id, position, chosen_material)
 }
